@@ -12,7 +12,6 @@ from sim_soens.soen_initialize import (
 from .soen_py_stepper import *
 from .soen_numba_stepper import *
 
-
 def run_soen_sim(net):
     '''
     Runs SOEN simulation (either via the python or julia backend)
@@ -99,8 +98,9 @@ def run_python_backend(net):
 
     start = time.perf_counter()
     
-    if net.backend == 'numb':
-        net = numba_net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
+    if net.backend == 'numba':
+        net = numb_net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
+        
     else:
         net = net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
 
