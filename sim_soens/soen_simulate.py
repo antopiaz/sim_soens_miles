@@ -99,7 +99,7 @@ def run_python_backend(net):
 
     start = time.perf_counter()
     
-    if net.backend == 'numba':
+    if net.backend == 'numb':
         net = numba_net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
     else:
         net = net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])

@@ -1,11 +1,14 @@
 import numpy as np
-import time
+#import time
+import numba
+from numba import jit
 
 '''
 To be converted for numba implementation!
 '''
 
-def numba_net_step(net,tau_vec,d_tau):
+@jit(nopython=True)
+def numb_net_step(net,tau_vec,d_tau):
     '''
     Time stepper for SOEN simulation
         - Can implement hardware in the loop for error and corrections
@@ -15,10 +18,9 @@ def numba_net_step(net,tau_vec,d_tau):
             - add spikes to neuron
             - send spikes to downstream neuron in the form of new input
     '''   
-    if net.timer==True:
-        _t0 = time.time()
+    #if net.timer==True:
+    #    _t0 = time.time()
 
-    HW=None
 
     for ii in range(len(tau_vec)-1):
             
@@ -30,21 +32,25 @@ def numba_net_step(net,tau_vec,d_tau):
             # update all input synapses and dendrites       
             for dend in node.dendrite_list:
                 # if hasattr(dend,'is_soma') and dend.threshold_flag == True:
-                    
-                numba_dendrite_updater(dend,ii,tau_vec[ii+1],d_tau,HW)
+                threshold = dend.threshold_flag
+
+                numba_dendrite_updater(dend,ii,tau_vec[ii+1],d_tau, threshold)
 
             # update all output synapses
             numba_output_synapse_updater(neuron,ii,tau_vec[ii+1])
             
             neuron = numba_spike(neuron,ii,tau_vec)
                        
-    if net.timer==True:
-        _t1 = time.time()
-        print(f'\nSimulation completed in time = {(_t1-_t0)} seconds \n')
+    #if net.timer==True:
+    #    _t1 = time.time()
+    #    print(f'\nSimulation completed in time = {(_t1-_t0)} seconds \n')
         
     return net
 
 
+
+
+@jit(nopython=True)
 def numba_spike(neuron,ii,tau_vec):
     # check if neuron integration loop has increased above threshold
     if neuron.dend_soma.s[ii+1] >= neuron.integrated_current_threshold:
@@ -128,12 +134,12 @@ def numba_spike(neuron,ii,tau_vec):
                 
     return neuron
 
-
-def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
+@jit(nopython=True)
+def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau, threshold):
     
     # make sure dendrite isn't a soma that reached threshold
     if hasattr(dend_obj, 'is_soma'):
-        if dend_obj.threshold_flag == True:
+        if threshold == True:
             update = False
             # wait for absolute refractory period before resetting soma
             if (present_time - dend_obj.spike_times[-1] 
@@ -222,16 +228,6 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     i_di__vec = np.asarray(dend_obj.i_di__subarray[_ind__phi_r]) # old way
 
 
-    # if dend_obj.pri == True:
-    #     lst = i_di__vec[:]
-    #     val = 2.7 - dend_obj.bias_current + dend_obj.s[time_index]
-    #     _ind__s = closest_index(lst,val)
-    # elif dend_obj.loops_present=='ri':
-    #     lst = i_di__vec[:]
-    #     val = (dend_obj.ib_max-new_bias+dend_obj.s[time_index])
-    #     _ind__s = closest_index(lst,val)
-    # else:
-
     lst =i_di__vec[:]
     val = dend_obj.s[time_index]
     _ind__s = numba_closest_index(lst,val)
@@ -250,6 +246,7 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     return
 
 
+@jit(nopython=True)
 def numba_output_synapse_updater(neuron_object,time_index,present_time):
     
     for synapse_key in neuron_object.synaptic_outputs:
@@ -284,9 +281,11 @@ def numba_output_synapse_updater(neuron_object,time_index,present_time):
                         
     return
 
+@jit(nopython=True)
 def numba_closest_index(lst,val):
     return (np.abs(lst-val)).argmin()
 
+@jit(nopython=True)
 def numba_spd_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
 
     if t <= hotspot_duration:
@@ -302,11 +301,12 @@ def numba_spd_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
     
     return phi
 
+@jit(nopython=True)
 def numba_spd_static_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
     '''
     Rewrite time stepper to reference one static spd response by time offeset
     '''
-    print(hotspot_duration)
+    #print(hotspot_duration)
     if t <= hotspot_duration:
         phi = phi_peak * (
             1 - tau_rise/tau_fall
