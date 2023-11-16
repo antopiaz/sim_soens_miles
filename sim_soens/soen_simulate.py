@@ -99,9 +99,13 @@ def run_python_backend(net):
     start = time.perf_counter()
     
     if net.backend == 'numba':
+        print("this is the numba backend")
+        print(type(net.time_params['tau_vec'][0]))
+
         net = numb_net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
         
     else:
+        print("python backend")
         net = net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
 
     finish = time.perf_counter()

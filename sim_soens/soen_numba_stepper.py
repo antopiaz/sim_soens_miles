@@ -2,6 +2,8 @@ import numpy as np
 #import time
 import numba
 from numba import jit
+from numba import types
+from numba.typed import Dict
 
 '''
 To be converted for numba implementation!
@@ -37,7 +39,7 @@ def numb_net_step(net,tau_vec,d_tau):
                 numba_dendrite_updater(dend,ii,tau_vec[ii+1],d_tau, threshold)
 
             # update all output synapses
-            numba_output_synapse_updater(neuron,ii,tau_vec[ii+1])
+            numba_output_synapse_updater(neuron.synaptic_outputs,ii,tau_vec[ii+1])
             
             neuron = numba_spike(neuron,ii,tau_vec)
                        
@@ -247,10 +249,10 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau, threshold):
 
 
 @jit(nopython=True)
-def numba_output_synapse_updater(neuron_object,time_index,present_time):
+def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
     
-    for synapse_key in neuron_object.synaptic_outputs:
-        syn_out = neuron_object.synaptic_outputs[synapse_key]
+    for synapse_key in synaptic_outputs:
+        syn_out = synaptic_outputs[synapse_key]
         # find most recent spike time for this synapse
         _st_ind = np.where( present_time > syn_out.spike_times_converted[:] )[0]
         
@@ -283,6 +285,9 @@ def numba_output_synapse_updater(neuron_object,time_index,present_time):
 
 @jit(nopython=True)
 def numba_closest_index(lst,val):
+    '''
+    Takes an array and a value and returns the index of the value in the array that's closest to val.
+    '''
     return (np.abs(lst-val)).argmin()
 
 @jit(nopython=True)
@@ -301,7 +306,8 @@ def numba_spd_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
     
     return phi
 
-@jit(nopython=True)
+
+
 def numba_spd_static_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
     '''
     Rewrite time stepper to reference one static spd response by time offeset
