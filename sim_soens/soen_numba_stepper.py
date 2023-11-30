@@ -2,14 +2,14 @@ import numpy as np
 #import time
 import numba
 from numba import jit
-from numba import types
-from numba.typed import Dict
+#from numba import types
+#from numba.typed import Dict
 
 '''
 To be converted for numba implementation!
 '''
 
-@jit(nopython=True)
+#@jit(nopython=True)
 def numb_net_step(net,tau_vec,d_tau):
     '''
     Time stepper for SOEN simulation
@@ -24,7 +24,7 @@ def numb_net_step(net,tau_vec,d_tau):
     #    _t0 = time.time()
 
 
-    for ii in range(len(tau_vec)-1):
+    for i in range(len(tau_vec)-1):
             
         # step through neurons
         for node in net.nodes:
@@ -34,14 +34,16 @@ def numb_net_step(net,tau_vec,d_tau):
             # update all input synapses and dendrites       
             for dend in node.dendrite_list:
                 # if hasattr(dend,'is_soma') and dend.threshold_flag == True:
-                threshold = dend.threshold_flag
-
-                numba_dendrite_updater(dend,ii,tau_vec[ii+1],d_tau, threshold)
+                
+                numba_dendrite_updater(dend,i,tau_vec[i+1],d_tau)
 
             # update all output synapses
-            numba_output_synapse_updater(neuron.synaptic_outputs,ii,tau_vec[ii+1])
+            #print('type')
+            #print(type(neuron.synaptic_outputs))
             
-            neuron = numba_spike(neuron,ii,tau_vec)
+            #numba_output_synapse_updater(neuron.synaptic_outputs,i,tau_vec[i+1])
+            
+            neuron = numba_spike(neuron,i,tau_vec)
                        
     #if net.timer==True:
     #    _t1 = time.time()
@@ -52,9 +54,10 @@ def numb_net_step(net,tau_vec,d_tau):
 
 
 
-@jit(nopython=True)
+@jit(nopython=False)
 def numba_spike(neuron,ii,tau_vec):
     # check if neuron integration loop has increased above threshold
+    print('hello')
     if neuron.dend_soma.s[ii+1] >= neuron.integrated_current_threshold:
         
         neuron.dend_soma.threshold_flag = True
@@ -82,10 +85,10 @@ def numba_spike(neuron,ii,tau_vec):
             random_numbers = np.random.default_rng().random(size = num_samples)
             
             photon_delay_tau_vec = np.zeros([num_samples])
-            for qq in range(num_samples):
+            for q in range(num_samples):
                 lst = neuron.electroluminescence_cumulative_vec[:]
-                val = random_numbers[qq]
-                photon_delay_tau_vec[qq] = neuron.time_params[
+                val = random_numbers[q]
+                photon_delay_tau_vec[q] = neuron.time_params[
                     'tau_vec__electroluminescence'
                     ][numba_closest_index(lst,val)]
                                     
@@ -136,12 +139,12 @@ def numba_spike(neuron,ii,tau_vec):
                 
     return neuron
 
-@jit(nopython=True)
-def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau, threshold):
+#@jit(nopython=True)
+def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     
     # make sure dendrite isn't a soma that reached threshold
     if hasattr(dend_obj, 'is_soma'):
-        if threshold == True:
+        if dend_obj.threshold_flag == True:
             update = False
             # wait for absolute refractory period before resetting soma
             if (present_time - dend_obj.spike_times[-1] 
@@ -186,11 +189,18 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau, threshold):
                 ):
                     _dt_spk = present_time - syn_obj.spike_times_converted[_st_ind]
                     
+                    #print(type(syn_obj.phi_peak))
+                    #print(type(syn_obj.tau_rise_converted))
+                    #print(type(syn_obj.tau_fall_converted))
+                    #print(type(syn_obj.hotspot_duration_converted))
+
                     _phi_spd = numba_spd_response(syn_obj.phi_peak, 
                                             syn_obj.tau_rise_converted,
                                             syn_obj.tau_fall_converted,
                                             syn_obj.hotspot_duration_converted, 
                                             _dt_spk)
+                    
+            
 
                     # to avoid going too low when a new spike comes in
                     if _st_ind - syn_obj._st_ind_last == 1:
@@ -230,6 +240,16 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau, threshold):
     i_di__vec = np.asarray(dend_obj.i_di__subarray[_ind__phi_r]) # old way
 
 
+    # if dend_obj.pri == True:
+    #     lst = i_di__vec[:]
+    #     val = 2.7 - dend_obj.bias_current + dend_obj.s[time_index]
+    #     _ind__s = closest_index(lst,val)
+    # elif dend_obj.loops_present=='ri':
+    #     lst = i_di__vec[:]
+    #     val = (dend_obj.ib_max-new_bias+dend_obj.s[time_index])
+    #     _ind__s = closest_index(lst,val)
+    # else:
+
     lst =i_di__vec[:]
     val = dend_obj.s[time_index]
     _ind__s = numba_closest_index(lst,val)
@@ -248,10 +268,11 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau, threshold):
     return
 
 
-@jit(nopython=True)
+
+#@jit(nopython=True)
 def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
-    
     for synapse_key in synaptic_outputs:
+        #print(synapse_key)
         syn_out = synaptic_outputs[synapse_key]
         # find most recent spike time for this synapse
         _st_ind = np.where( present_time > syn_out.spike_times_converted[:] )[0]
@@ -280,7 +301,7 @@ def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
                     syn_out._phi_spd_memory = 0
                 
             syn_out._st_ind_last = _st_ind
-                        
+     
     return
 
 @jit(nopython=True)
@@ -292,6 +313,8 @@ def numba_closest_index(lst,val):
 
 @jit(nopython=True)
 def numba_spd_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
+    
+        
 
     if t <= hotspot_duration:
         phi = phi_peak * ( 
