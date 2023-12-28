@@ -1,7 +1,8 @@
 import numpy as np
 #import time
 import numba
-from numba import jit
+from numba import jit, njit
+
 #from numba import types
 #from numba.typed import Dict
 
@@ -41,7 +42,7 @@ def numb_net_step(net,tau_vec,d_tau):
             #print('type')
             #print(type(neuron.synaptic_outputs))
             
-            #numba_output_synapse_updater(neuron.synaptic_outputs,i,tau_vec[i+1])
+            numba_output_synapse_updater(neuron.synaptic_outputs,i,tau_vec[i+1])
             
             neuron = numba_spike(neuron,i,tau_vec)
                        
@@ -54,13 +55,21 @@ def numb_net_step(net,tau_vec,d_tau):
 
 
 
-@jit(nopython=False)
+#@njit(nopython=True)
 def numba_spike(neuron,ii,tau_vec):
     # check if neuron integration loop has increased above threshold
-    print('hello')
+
+    
+
     if neuron.dend_soma.s[ii+1] >= neuron.integrated_current_threshold:
         
         neuron.dend_soma.threshold_flag = True
+        print('yes')
+        print(neuron.dend_soma.threshold_flag)
+        print(neuron.name)
+        print(neuron.source_type)
+        print(neuron.synaptic_outputs)
+       
         neuron.dend_soma.spike_times = np.append(
             neuron.dend_soma.spike_times,
             tau_vec[ii+1]
@@ -97,7 +106,6 @@ def numba_spike(neuron,ii,tau_vec):
                 syn_out[synapse_name].photon_delay_times__temp = []
                 
             while len(photon_delay_tau_vec) > 0:
-                
                 for synapse_name in syn_out:
                     # print(photon_delay_tau_vec[0]/779.5556478344771)
                     syn_out[synapse_name].photon_delay_times__temp.append(
@@ -110,22 +118,28 @@ def numba_spike(neuron,ii,tau_vec):
                 val = tau_vec[ii+1] + np.min(
                     syn_out[synapse_name].photon_delay_times__temp
                     )
-                _ind = numba_closest_index(lst,val)
-                # a prior spd event has occurred at this synapse                        
+                _ind = tau_vec[ii+1]
+                # numba_closest_index(lst,val)
+                # a prior spd event has occurred at this synapse
+                                        
                 if len(syn_out[synapse_name].spike_times_converted) > 0:
+                    print('used')
                     # the spd has had time to recover 
-                    if (tau_vec[_ind] - syn_out[synapse_name].spike_times_converted[-1] >= 
-                        syn_out[synapse_name].spd_reset_time_converted):                               
+                    if (_ind - syn_out[synapse_name].spike_times_converted[-1] >= 
+                        syn_out[synapse_name].spd_reset_time_converted): 
+                        
+
                         syn_out[synapse_name].spike_times_converted = np.append(
                             syn_out[synapse_name].spike_times_converted,
-                            tau_vec[_ind]
+                            _ind
                             )
+                
                 # a prior spd event has not occurred at this synapse
-                else: 
-                    syn_out[synapse_name].spike_times_converted = np.append(
-                        syn_out[synapse_name].spike_times_converted,
-                        tau_vec[_ind]
-                        )
+                #else: 
+                syn_out[synapse_name].spike_times_converted = np.append(
+                    syn_out[synapse_name].spike_times_converted,
+                    _ind #tau_vec[_ind]
+                    )
                                         
         elif neuron.source_type == 'delay_delta':
             lst = tau_vec[:]
@@ -271,7 +285,9 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
 
 #@jit(nopython=True)
 def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
+    
     for synapse_key in synaptic_outputs:
+        
         #print(synapse_key)
         syn_out = synaptic_outputs[synapse_key]
         # find most recent spike time for this synapse
@@ -313,9 +329,9 @@ def numba_closest_index(lst,val):
 
 @jit(nopython=True)
 def numba_spd_response(phi_peak,tau_rise,tau_fall,hotspot_duration,t):
+    '''
     
-        
-
+    '''
     if t <= hotspot_duration:
         phi = phi_peak * ( 
             1 - tau_rise/tau_fall 

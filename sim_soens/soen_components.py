@@ -15,6 +15,8 @@ from .soen_plotting import (
 )
 # p = physical_constants()
 
+import numba
+from numba import njit
 
 class input_signal():
     '''
@@ -270,7 +272,11 @@ class dendrite():
         self.dendritic_connection_strengths = dict()
                     
         dendrite.dendrites[self.name] = self
-            
+        for key in (dendrite.dendrites[self.name].__dict__):
+            print(key, '->', dendrite.dendrites[self.name].__dict__[key])
+        print('\n')
+        #print(dendrite.__dict__.keys())
+
         return 
     
     def add_input(self, connection_object, connection_strength = 1):
@@ -373,7 +379,7 @@ class synapse():
         # print('synapse deleted')
         return
     
-    
+#@njit
 class neuron():
     '''
     Neuron object class
@@ -672,7 +678,6 @@ class neuron():
         # print('dendrite deleted')
         return
     
-
 class network():
     '''
     Network object class
