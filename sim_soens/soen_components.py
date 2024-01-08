@@ -18,6 +18,9 @@ from .soen_plotting import (
 import numba
 from numba import njit
 
+print_dendrite = False
+print_neuron = True
+
 class input_signal():
     '''
     Input Signal Object:
@@ -272,10 +275,12 @@ class dendrite():
         self.dendritic_connection_strengths = dict()
                     
         dendrite.dendrites[self.name] = self
-        for key in (dendrite.dendrites[self.name].__dict__):
-            print(key, '->', dendrite.dendrites[self.name].__dict__[key])
-        print('\n')
-        #print(dendrite.__dict__.keys())
+        if print_dendrite:
+            for key in (dendrite.dendrites[self.name].__dict__):
+                print(key, '->', dendrite.dendrites[self.name].__dict__[key])
+            print('\n')
+            print(dendrite.__dict__.keys())
+            print('280')
 
         return 
     
@@ -643,6 +648,28 @@ class neuron():
         self.dend_soma.syn_outs = {}
 
         neuron.neurons[self.name] = self
+
+        neuron_array = np.array
+        integers_array = []
+        float_array = []
+
+        if print_neuron:
+            print(neuron.neurons[self.name])
+            for key in (neuron.neurons[self.name].__dict__):
+                print(key, '->', neuron.neurons[self.name].__dict__[key], 'type', type(neuron.neurons[self.name].__dict__[key]))
+                if(type(neuron.neurons[self.name].__dict__[key]) == int):
+                    integers_array.append(str(key) + ' ' + str(neuron.neurons[self.name].__dict__[key]))
+                if(type(neuron.neurons[self.name].__dict__[key]) == float):
+                    float_array.append(str(key) + ' ' + str(neuron.neurons[self.name].__dict__[key]))
+            print('\n')
+        integers_array = np.asarray(integers_array)  
+        float_array = np.asarray(float_array) 
+        print(float_array.size)
+        
+        
+       
+
+
         return    
         
     def add_input(self, connection_object, connection_strength = 1):
