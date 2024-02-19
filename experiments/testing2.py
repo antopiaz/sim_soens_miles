@@ -5,7 +5,7 @@ sys.path.append('../sim_soens')
 sys.path.append('../')
 from sim_soens.neuron_library import NeuralZoo
 from sim_soens.super_input import SuperInput
-from sim_soens.soen_components_numba import input_signal, synapse, neuron, network
+from sim_soens.soen_components import input_signal, synapse, neuron, network
 from sim_soens.soen_plotting import raster_plot
 from sim_soens.super_node import SuperNode
 
@@ -61,12 +61,13 @@ def simple_net():
 
     raster_plot(net.spikes)
 
-    # node1.plot_structure()
+    node1.plot_structure()
     node1.parameter_print()
     node2.parameter_print()
     node1.plot_neuron_activity(net=net,phir=True,spikes=False,ref=True,dend=True)
     node2.plot_neuron_activity(net=net,phir=True,spikes=False,ref=True,dend=True)
 
+    print("components \n")
     print(node2.synapse_list[0].__dict__)
     plt.plot(node2.synapse_list[0].phi_spd)
     plt.show()

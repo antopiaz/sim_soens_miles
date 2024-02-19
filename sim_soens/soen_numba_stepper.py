@@ -42,7 +42,10 @@ def numb_net_step(net,tau_vec,d_tau):
             #print('type')
             #print(type(neuron.synaptic_outputs))
             
-            numba_output_synapse_updater(neuron.synaptic_outputs,i,tau_vec[i+1])
+            synaptic_outputs = np.asarray(list(neuron.synaptic_outputs.values()))
+            #print(synaptic_outputs)
+
+            numba_output_synapse_updater(synaptic_outputs,i,tau_vec[i+1])
             
             neuron = numba_spike(neuron,i,tau_vec)
                        
@@ -286,10 +289,11 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
 #@jit(nopython=True)
 def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
     
-    for synapse_key in synaptic_outputs:
+    for i in range(len(synaptic_outputs)):
         
-        #print(synapse_key)
-        syn_out = synaptic_outputs[synapse_key]
+        #print("synapse key ", i)
+
+        syn_out = synaptic_outputs[i]
         # find most recent spike time for this synapse
         _st_ind = np.where( present_time > syn_out.spike_times_converted[:] )[0]
         
