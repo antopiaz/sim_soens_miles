@@ -1,9 +1,8 @@
 import numpy as np
 
 from .soen_components import neuron, dendrite, synapse
-from .soen_utilities import dend_load_arrays_thresholds_saturations
-d_params_ri = dend_load_arrays_thresholds_saturations('default_ri')
-d_params_rtti = dend_load_arrays_thresholds_saturations('default_rtti')
+from .soen_utilities import dend_load_arrays_thresholds_saturations, index_finder
+from .super_functions import timer_func
 
 class SuperNode():
 
@@ -70,14 +69,22 @@ class SuperNode():
 
         # writing over default settings
         self.__dict__.update(entries)
-        self.params = self.__dict__  
-
+        # self.params = self.__dict__  
+        # print("PARAMS: ", self.__dict__.keys())
         # give neuron name if not already assigned
-        if "name" not in self.params:
-            self.params['name'] = f"rand_neuron_{int(np.random.rand()*100000)}"
+        if hasattr(self,'name')==False:
+            self.name = f"rand_neuron_{int(np.random.rand()*100000)}"
 
         # create a neuron object given init params
-        self.neuron = neuron(**self.params)
+        neuron_params = {k:v for k,v in self.__dict__.items() if (k!='dendrites' or 
+                                                                k!='dendrite_list' or
+                                                                k!='synapses' or
+                                                                k!='synapse_list' or
+                                                                k!='synaptice_structure' or
+                                                                k!='params' 
+                                                                )}
+        # print("N-PARAMS: ", neuron_params.keys())
+        self.neuron = neuron(**neuron_params)
         self.neuron.dend_soma.branch=0
 
         # add somatic dendrite (dend_soma) and refractory dendrite to list
@@ -125,6 +132,20 @@ class SuperNode():
                 self.global_arbor_params()
 
     def global_arbor_params(self):
+
+
+        dend_params = {k:v for k,v in self.__dict__.items() if (k!='dendrites'
+                                                                and k!='dendrite_list'
+                                                                and k!='synapses' 
+                                                                and k!='synapse_list' 
+                                                                and k!='synaptice_structure' 
+                                                                and k!='params' 
+                                                                and k!= 'neuron'
+                                                                and k!= 'weights'
+                                                                )}
+
+        # print("GLOB-D-PARAMS: ", dend_params.keys())
+
         count=0
         den_count = 0
         for i,layer in enumerate(self.weights):
@@ -134,7 +155,8 @@ class SuperNode():
                 for k,d in enumerate(dens):
 
                     # parameters for creating current dendrite
-                    dend_params = self.params
+                    # dend_params = self.params
+                    
                     dend_params["dend_name"] = f"{self.neuron.name}_lay{i+1}_branch{j}_den{k}"
 
                     # generate a dendrite given parameters
@@ -156,8 +178,23 @@ class SuperNode():
                 self.dendrites[i].append(sub)
 
     def specified_arbor_params(self):
+        d_params_ri = dend_load_arrays_thresholds_saturations('default_ri')
+        d_params_rtti = dend_load_arrays_thresholds_saturations('default_rtti')
         count=0
         den_count = 0
+
+        dend_params = {k:v for k,v in self.__dict__.items() if (k!='dendrites'
+                                                                and k!='dendrite_list'
+                                                                and k!='synapses' 
+                                                                and k!='synapse_list' 
+                                                                and k!='synaptice_structure' 
+                                                                and k!='params' 
+                                                                and k!= 'neuron'
+                                                                and k!= 'weights'
+                                                                )}
+
+        # print("SPEC-D-PARAMS: ", dend_params.keys())
+
         for i,layer in enumerate(self.weights):
             c=0
             for j,dens in enumerate(layer):
@@ -166,7 +203,7 @@ class SuperNode():
                     #(todo) add flags and auto connects for empty connections
 
                     # parameters for creating current dendrite
-                    dend_params = self.params
+                    # dend_params = self.params
 
                     # check for any dendrite-specific parameters
                     # if so, use in dend_parameters
@@ -247,6 +284,148 @@ class SuperNode():
 
 
     ############################################################################
+    #                            New Arbor Methods                             #
+    ############################################################################ 
+
+    def make_weights(self,size,exin,fixed):
+        '''
+        '''
+        ones = np.ones(size)
+        symm = 1
+
+        if exin != None:
+            # print(exin)
+            symm = np.random.choice([-1,0,1], p=[exin[0]/100,exin[1]/100,exin[2]/100], size=size)
+
+        if fixed is not None:
+            # print("fixed")
+            w = ones*fixed*symm
+        else:
+            w = np.random.rand(size)*symm
+        return w
+    
+    def recursive_downstream_inhibition_counter(self,dendrite,superdend):
+        for out_name,out_dend in dendrite.outgoing_dendritic_connections.items():
+            cs = out_dend.dendritic_connection_strengths[dendrite.name]
+            if cs < 0:
+                superdend.downstream_inhibition += 1
+            self.recursive_downstream_inhibition_counter(out_dend,superdend)
+
+    def add_inhibition_counts(self):
+        '''
+        '''
+        for dendrite in self.dendrite_list:
+            dendrite.downstream_inhibition = 0
+            self.recursive_downstream_inhibition_counter(dendrite,dendrite)
+
+    # @timer_func
+    def max_s_finder(self,dendrite):
+        '''
+        '''
+        d_params_ri = dend_load_arrays_thresholds_saturations('default_ri')
+        ib_list = d_params_ri["ib__list"]
+        s_max_plus__vec = d_params_ri["s_max_plus__vec"]
+        _ind_ib = index_finder(ib_list[:],dendrite.ib) 
+        return s_max_plus__vec[_ind_ib]
+
+    def normalize_fanin(self,coeff):
+        '''
+        '''
+        # print("NORMALIZING")
+        for dendrite in self.dendrite_list:
+            if len(dendrite.dendritic_connection_strengths) > 0:
+                max_s = self.max_s_finder(dendrite) - dendrite.phi_th
+                cs_list = []
+                max_list = []
+                influence = []
+                for in_name,in_dend in dendrite.dendritic_inputs.items():
+                    cs = dendrite.dendritic_connection_strengths[in_name]
+                    if 'ref' in in_name: cs = 0
+                    max_in = self.max_s_finder(in_dend)
+                    cs_list.append(cs)
+                    max_list.append(max_in)
+                    influence.append(cs*max_in)
+                if sum(influence) > max_s:
+                    norm_fact = sum(influence)/max_s
+                    cs_normed = cs_list/norm_fact
+                    for i,(in_name,cs) in enumerate(dendrite.dendritic_connection_strengths.items()):
+                        if 'ref' not in in_name:
+                            dendrite.dendritic_connection_strengths[in_name] = cs_normed[i]*coeff
+
+    def normalize_fanin_symmetric(self,buffer=0,coeff=1):
+        '''
+        
+        '''
+        for dendrite in self.dendrite_list:
+            if len(dendrite.dendritic_connection_strengths) > 0:  
+
+                # print(f"{dendrite.name} =>  phi_th = {dendrite.phi_th} :: max_s = {self.max_s_finder(dendrite)}")
+                max_phi = 0.5 - dendrite.phi_th*buffer
+
+                negatives = []
+                neg_max   = []
+                neg_dends = []
+
+                positives = []
+                pos_max   = []
+                pos_dends = []
+
+
+                for in_name,in_dend in dendrite.dendritic_inputs.items():
+                    cs = dendrite.dendritic_connection_strengths[in_name]
+                    if 'ref' in in_name: cs = 0
+                    max_in = self.max_s_finder(in_dend)
+                    # print(f"  {in_name} -> {cs}") 
+
+                    if cs<0:
+                        print(cs)
+                        negatives.append(cs)
+                        neg_max.append(cs*max_in)
+                        neg_dends.append(in_dend)
+
+                    elif cs>0:
+                        positives.append(cs)
+                        pos_max.append(cs*max_in)
+                        pos_dends.append(in_dend)
+            
+
+                if sum(pos_max) > max_phi:
+                    # print(f" Normalizing input to {dendrite.name} from {sum(pos_max)} to {max_phi}")
+                    for pos_dend in pos_dends:
+                        cs = dendrite.dendritic_connection_strengths[pos_dend.name]
+                        cs_max = cs*self.max_s_finder(pos_dend)
+                        cs_proportion = cs_max/sum(pos_max)
+                        cs_normalized = max_phi*cs_proportion/self.max_s_finder(pos_dend) 
+                        # print(f"   {pos_dend} -> {cs_normalized}")
+                        dendrite.dendritic_connection_strengths[pos_dend.name] = cs_normalized*coeff
+                # print(sum(np.abs(neg_max)))
+                if sum(np.abs(neg_max)) > max_phi:
+                    # print(f" Normalizing input to {dendrite.name} from {sum(neg_max)} to {max_phi}")
+
+                    for neg_dend in neg_dends:
+                        cs = np.abs(dendrite.dendritic_connection_strengths[neg_dend.name])
+                        cs_max = cs*self.max_s_finder(neg_dend)
+                        cs_proportion = cs_max/sum(np.abs(neg_max))
+                        cs_normalized = max_phi*cs_proportion/self.max_s_finder(neg_dend)*-1
+                        # print(f"   {neg_dend} -> {cs_normalized}")
+                        dendrite.dendritic_connection_strengths[neg_dend.name] = cs_normalized*coeff
+
+                # print("\n")
+
+    def random_flux(self,rand_flux):
+        '''
+        '''
+        # print("RANDOM FLUX")
+        for l,layer in enumerate(self.dendrites):
+            for g,group in enumerate(layer):
+                for d,dend in enumerate(group):
+                    if 'ref' not in dend.name and 'soma' not in dend.name:
+                        sign = np.random.choice([-1,1], p=[.5,.5], size=1)[0]
+                        dend.offset_flux = np.random.rand()*rand_flux*sign
+
+
+
+    ############################################################################
     #                              Synapses                                    #
     ############################################################################ 
 
@@ -291,7 +470,7 @@ class SuperNode():
             for ii,S in enumerate(self.synaptic_structure):
 
                 # make a synapse
-                syn = synapse(name=f'{self.neuron.name[-2:]}_syn{ii}')
+                syn = synapse(name=f'{self.neuron.name}_syn{ii}')
 
                 # append to easy-access list
                 self.synapse_list.append(syn)
@@ -334,7 +513,7 @@ class SuperNode():
                 for j,group in enumerate(layer):
                     for k,dend in enumerate(group):
                         for ii,syn in enumerate(self.synaptic_indices):
-                            name = f'{self.neuron.name[-2:]}_syn{ii}'
+                            name = f'{self.neuron.name}_syn{ii}'
                             s = synapse(name=name)
                             self.synapse_list.append(s)
                             if hasattr(self, 'synaptic_strengths'):

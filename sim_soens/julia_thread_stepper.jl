@@ -33,12 +33,14 @@ function stepper(net_dict::Dict{Any,Any})
             node_name = node_names[idx]
             loop_synapses(node,node_name,syn_names,net_dict["T"],net_dict["conversion"],t_idx,net_dict["dt"])
             loop_dendrites(node,node_name,dend_names,net_dict["d_tau"],t_idx)
-
+            
             if node["dendrites"][node["soma"]].spiked == 1
                 for (syn_name,spks) in node["outputs"]
                     for (node_name,node) in net_dict["nodes"]
-                        if occursin(node_name,syn_name)
-                            push!(net_dict["nodes"][node_name]["synapses"][syn_name].spike_times,t_idx+100)
+                        # if occursin(node_name,syn_name)
+                        if node_name*'_' == syn_name[begin:length(node_name)+1]
+                            # @show node_name, syn_name 
+                            push!(net_dict["nodes"][node_name]["synapses"][syn_name].spike_times,t_idx+Int(10/net_dict["dt"]))
                         end
                     end
                 end
@@ -51,6 +53,7 @@ function stepper(net_dict::Dict{Any,Any})
 end
 
 function loop_synapses(node::Dict{Any, Any},node_name::String,syn_names::Dict{String,Vector{Any}},T::Int64,conversion::Float64,t_idx::Int64,dt::Float64)
+    duration = 1500 #Int64(250/dt)
     Threads.@threads for iter in 1:length(node["synapses"])
         syn = node["synapses"][syn_names[node_name][iter]]
         synapse_input_update(
@@ -58,7 +61,8 @@ function loop_synapses(node::Dict{Any, Any},node_name::String,syn_names::Dict{St
             t_idx,
             T,
             conversion,
-            dt
+            dt,
+            duration
             )
     end
 end
@@ -75,113 +79,123 @@ function loop_dendrites(node::Dict{Any, Any},node_name::String,dend_names::Dict{
     end
 end
 
-function stepper(net_dict::Dict{String,Any})
-    # @show Threads.nthreads()
-    """
-    Plan:
-     - Go over all nodes in network
-        - create structs for synapses
-        - create structs for dendrites
-        - creat information table for connectivity
-        - update in downstream direction
-        - return dataframe of signals and fluxes
-            - update py objects with new info
-        - win
-    """
-    # net_dict["T"] = 10
-    syn_names  = Dict{String,Vector{Any}}()
-    dend_names = Dict{String,Vector{Any}}()
-    node_names = []
+# function stepper(net_dict::Dict{String,Any})
+#     # @show Threads.nthreads()
+#     """
+#     Plan:
+#      - Go over all nodes in network
+#         - create structs for synapses
+#         - create structs for dendrites
+#         - creat information table for connectivity
+#         - update in downstream direction
+#         - return dataframe of signals and fluxes
+#             - update py objects with new info
+#         - win
+#     """
+#     # net_dict["T"] = 10
+#     syn_names  = Dict{String,Vector{Any}}()
+#     dend_names = Dict{String,Vector{Any}}()
+#     node_names = []
 
-    for (node_name,node) in net_dict["nodes"]
-        push!(node_names,node_name)
-        syns = collect(keys(node["synapses"]))
-        dends = collect(keys(node["dendrites"]))
-        syn_names[node_name] = syns
-        dend_names[node_name] = dends
-    end
+#     for (node_name,node) in net_dict["nodes"]
+#         push!(node_names,node_name)
+#         syns = collect(keys(node["synapses"]))
+#         dends = collect(keys(node["dendrites"]))
+#         syn_names[node_name] = syns
+#         dend_names[node_name] = dends
+#     end
 
-    for t_idx in 1:net_dict["T"]-1
-        Threads.@threads for idx in 1:length(node_names)
-            node = net_dict["nodes"][node_names[idx]]
-            node_name = node_names[idx]
-            loop_synapses(node,node_name,syn_names,net_dict["T"],net_dict["conversion"],t_idx,net_dict["dt"])
-            loop_dendrites(node,node_name,dend_names,net_dict["d_tau"],t_idx)
+#     for t_idx in 1:net_dict["T"]-1
+#         Threads.@threads for idx in 1:length(node_names)
+#             node = net_dict["nodes"][node_names[idx]]
+#             node_name = node_names[idx]
+#             loop_synapses(node,node_name,syn_names,net_dict["T"],net_dict["conversion"],t_idx,net_dict["dt"])
+#             loop_dendrites(node,node_name,dend_names,net_dict["d_tau"],t_idx)
 
-            if node["dendrites"][node["soma"]].spiked == 1
-                for (syn_name,spks) in node["outputs"]
-                    for (node_name,node) in net_dict["nodes"]
-                        if occursin(node_name,syn_name)
-                            push!(net_dict["nodes"][node_name]["synapses"][syn_name].spike_times,t_idx+100)
-                        end
-                    end
-                end
-                node["dendrites"][node["soma"]].spiked = 0
-            end
+#             if node["dendrites"][node["soma"]].spiked == 1
+#                 for (syn_name,spks) in node["outputs"]
+#                     for (node_name,node) in net_dict["nodes"]
+#                         if occursin(node_name,syn_name)
+#                             push!(net_dict["nodes"][node_name]["synapses"][syn_name].spike_times,t_idx+100)
+#                         end
+#                     end
+#                 end
+#                 node["dendrites"][node["soma"]].spiked = 0
+#             end
             
+#         end
+#     end
+#     return net_dict
+# end
+
+# function loop_synapses(node::Dict{String, Any},node_name::String,syn_names::Dict{String,Vector{Any}},T::Int64,conversion::Float64,t_idx::Int64,dt::Float64)
+#     Threads.@threads for iter in 1:length(node["synapses"])
+#         syn = node["synapses"][syn_names[node_name][iter]]
+#         synapse_input_update(
+#             syn,
+#             t_idx,
+#             T,
+#             conversion,
+#             dt
+#             )
+#     end
+# end
+
+# function loop_dendrites(node::Dict{String, Any},node_name::String,dend_names::Dict{String,Vector{Any}},d_tau::Float64,t_idx::Int64)
+#     Threads.@threads for iter in 1:length(node["dendrites"])
+#         dend = node["dendrites"][dend_names[node_name][iter]]
+#         dend_update(
+#             node,
+#             dend,
+#             t_idx,
+#             d_tau
+#             )
+#     end
+# end
+
+
+function synapse_input_update(syn::Synapse,t::Int64,T::Int64,conversion::Float64,dt::Float64,duration::Int64)
+    # hotspot = 3
+    if t in syn.spike_times
+        spk_idx = findfirst(item -> item == t, syn.spike_times)
+        if spk_idx > 1
+            if syn.spike_times[spk_idx] - syn.spike_times[spk_idx-1] > 35
+                # @show syn.spike_times[spk_idx], syn.spike_times[spk_idx-1]
+                until = min(t+duration,T)
+                syn.phi_spd[t:until] = max.(syn.phi_spd[t:until],SPD_response(conversion,dt)[1:until-t+1])
+            else
+                deleteat!(syn.spike_times,spk_idx)
+            end
+        else
+            until = min(t+duration,T)
+            syn.phi_spd[t:until] = max.(syn.phi_spd[t:until],SPD_response(conversion,dt)[1:until-t+1])
         end
     end
-    return net_dict
-end
-
-function loop_synapses(node::Dict{String, Any},node_name::String,syn_names::Dict{String,Vector{Any}},T::Int64,conversion::Float64,t_idx::Int64,dt::Float64)
-    Threads.@threads for iter in 1:length(node["synapses"])
-        syn = node["synapses"][syn_names[node_name][iter]]
-        synapse_input_update(
-            syn,
-            t_idx,
-            T,
-            conversion,
-            dt
-            )
-    end
-end
-
-function loop_dendrites(node::Dict{String, Any},node_name::String,dend_names::Dict{String,Vector{Any}},d_tau::Float64,t_idx::Int64)
-    Threads.@threads for iter in 1:length(node["dendrites"])
-        dend = node["dendrites"][dend_names[node_name][iter]]
-        dend_update(
-            node,
-            dend,
-            t_idx,
-            d_tau
-            )
-    end
-end
-
-
-function synapse_input_update(syn::Synapse,t::Int64,T::Int64,conversion::Float64,dt::Float64)
-    if t in syn.spike_times
-        duration = 1500
-        hotspot = 3
-        until = min(t+duration,T)
-        syn.phi_spd[t:until] = max.(syn.phi_spd[t:until],SPD_response(conversion,hotspot,dt)[1:until-t+1])
-    end
     return syn
 end
 
 
-function synapse_input_update(syn::RefractorySynapse,t::Int64,T::Int64,conversion::Float64,dt::Float64)
+function synapse_input_update(syn::RefractorySynapse,t::Int64,T::Int64,conversion::Float64,dt::Float64,duration::Int64)
+    # hotspot = 3
     if t in syn.spike_times
-        duration = 1500
-        hotspot = 2 
         # t = tau_vec[spk]
         until = min(t+duration,T)
-        syn.phi_spd[t:until] = max.(syn.phi_spd[t:until],SPD_response(conversion,hotspot,dt)[1:until-t+1])
+        syn.phi_spd[t:until] = max.(syn.phi_spd[t:until],SPD_response(conversion,dt)[1:until-t+1])
     end
     return syn
 end
 
 
-function SPD_response(conversion::Float64,hs::Int64,dt::Float64)
+function SPD_response(conversion::Float64,dt::Float64)
     """
     Move to before time stepper
     """
+    hs = 3
     conversion = (conversion * .01) #.0155
     phi_peak = 0.5
-    tau_rise = 0.02 *conversion
-    tau_fall = 65   *conversion/(dt*10) #50
-    hotspot  = hs*.02    *conversion #- 22.925
+    tau_rise = 0.02    *conversion
+    tau_fall = 65      *conversion/(dt*10) #50
+    hotspot  = hs*.02  *conversion #- 22.925
     # @show phi_peak 
     # @show tau_rise 
     # @show tau_fall 

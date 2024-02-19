@@ -1,5 +1,17 @@
 import numpy as np
 
+def dict_size(dct):
+    from pympler import asizeof
+    print("Surface Size: ", asizeof.asizeof(dct),"\n")
+    print("Item sizes:")
+    tot = 0
+    for i,(k,v) in enumerate(dct.items()):
+        size = asizeof.asizeof(v)
+        print(f"  {k}"," "*(50-len(k)),f" -- {size}")
+        tot+=size
+        # print(tot)
+    print("\nTotal Size: ",tot,"\n")
+
 def array_to_rows(arrays,channels):
     rows = [ [] for _ in range(channels) ]
     for i in range(len(arrays[0])):
@@ -171,7 +183,18 @@ def spks_to_binmatrix(N,T,spikes):
             binned[int(spikes[0][i])][int(np.floor(spikes[1][i]))] += 1
     return binned
 
-def make_letters():
+def bin_matrix_to_spks(mat):
+    indices = []
+    times = []
+    for i,row in enumerate(mat):
+        for t,val in enumerate(row):
+            if val!=0:
+                indices.append(i)
+                times.append(t)
+    spikes = [indices,times]
+    return spikes
+
+def make_letters(patterns='zvn'):
 
     # non-noisy nine-pixel letters
     letters = {
@@ -188,12 +211,64 @@ def make_letters():
               1,0,1]
     }
 
+    if patterns == 'zvnx+':
+        letters.update({
+            'x': [1,0,1,
+                  0,1,0,
+                  1,0,1],
+            '+': [0,1,0,
+                  1,1,1,
+                  0,1,0]
+        })
+
+    if patterns == 'all':
+        letters.update({
+            'x': [1,0,1,
+                  0,1,0,
+                  1,0,1],
+            '+': [0,1,0,
+                  1,1,1,
+                  0,1,0],
+            "|": 
+                [0,1,0,
+                 0,1,0,
+                 0,1,0],
+            "|  ": 
+                [1,0,0,
+                 1,0,0,
+                 1,0,0,],
+            "  |": 
+                [0,0,1,
+                 0,0,1,
+                 0,0,1,],
+            "-": 
+                [0,0,0,
+                 1,1,1,
+                 0,0,0],
+            "_": 
+                [0,0,0,
+                 0,0,0,
+                 1,1,1],
+            "\\": 
+                [1,0,0,
+                 0,1,0,
+                 0,0,1],
+            "/": 
+                [0,0,1,
+                 0,1,0,
+                 1,0,0],
+            "[]": 
+                [1,1,1,
+                 1,1,1,
+                 1,1,1],
+        })
+
     return letters
 
-def plot_letters(letters):
+def plot_letters(letters,letter=None):
     import matplotlib.cm as cm
     import matplotlib.pyplot as plt
-    fig, axs = plt.subplots(1, len(letters),figsize=(12,6))
+    fig, axs = plt.subplots(1, len(letters),figsize=(8,6))
     for  j,(name,pixels) in enumerate(letters.items()):
         arrays = [[] for i in range(3)]
         count = 0
@@ -205,21 +280,77 @@ def plot_letters(letters):
 
         axs[j].set_xticks([])
         axs[j].set_yticks([])
-        axs[j].set_title(name,fontsize=18)
-        axs[j].imshow(
-            pixels,
-            interpolation='nearest',
-            cmap=cm.Blues
-            )
+        axs[j].set_title(name,fontsize=14)
+
+        if letter==name:
+            axs[j].imshow(
+                pixels,
+                interpolation='nearest',
+                cmap=cm.Oranges
+                )
+        else:
+            axs[j].imshow(
+                pixels,
+                interpolation='nearest',
+                cmap=cm.Blues
+                )
     plt.show()
 
 def make_inputs(letters,spike_time):
     from sim_soens.super_input import SuperInput
     # make the input spikes for different letters
-    inputs = []
+    inputs = {}
     for name, pixels in letters.items():
         idx = np.where(np.array(letters[name])==1)[0]
         spike_times = np.ones(len(idx))*spike_time
         defined_spikes=[idx,spike_times]
-        inputs.append(SuperInput(type='defined',defined_spikes=defined_spikes))
+        inputs[name]=SuperInput(type='defined',defined_spikes=defined_spikes)
     return inputs
+
+def make_spikes(letter,spike_time):
+    '''
+    Converts a letter-array into spikes = [indices,times]
+    '''
+    # convert to indices of nine-channel input
+    idx = np.where(np.array(letter)==1)[0]
+
+    # all non-zero indices will spike at spike_time
+    times = (np.ones(len(idx))*spike_time).astype(int)
+    spikes = [idx,times]
+
+    return spikes
+
+def pixels_to_spikes(letter,spike_times):
+    '''
+    Converts a letter-array into spikes = [indices,times]
+    '''
+    indices = []
+    times   = []
+
+    # convert to indices of nine-channel input
+    idx = np.where(np.array(letter)==1)[0]
+
+    # all non-zero indices will spike at spike_times
+    for time in spike_times:
+        times.append((np.ones(len(idx))*time).astype(int))
+        indices.append(idx)
+    times = np.concatenate(times)
+    indices = np.concatenate(indices)
+
+    assert len(times)==len(indices)
+    spikes = [list(indices),list(times)]
+
+    return spikes
+
+    
+def timer_func(func): 
+    from time import time 
+    # This function shows the execution time of  
+    # the function object passed 
+    def wrap_func(*args, **kwargs): 
+        t1 = time() 
+        result = func(*args, **kwargs) 
+        t2 = time() 
+        print(f'Function {func.__name__!r} executed in {(t2-t1):.4f}s') 
+        return result 
+    return wrap_func 

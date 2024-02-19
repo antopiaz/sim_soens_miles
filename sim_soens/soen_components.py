@@ -33,7 +33,7 @@ class input_signal():
     _next_uid = 0
     input_signals = dict()
     
-    def __init__(self, **params):
+    def __init__(self, **input_params):
         
         #make new input signal
         self.uid = input_signal._next_uid
@@ -45,9 +45,17 @@ class input_signal():
         self.num_photons_per_spike = 1 
 
 
+        input_params = {k:v for k,v in input_params.items() if (k=='input_temporal_form'
+                                                                or k=='t_first_spike'
+                                                                or k=='name'
+                                                                or k=='applied_flux'
+                                                                or k=='connection_strength' 
+                                                                or 'spike_times'
+                                                                )}
+
         # UPDATE TO CUSTOM PARAMS
-        self.__dict__.update(params)
-        
+        self.__dict__.update(input_params)
+
 
         if self.input_temporal_form  not in ['constant',
                                              'constant_rate', 
@@ -95,7 +103,7 @@ class input_signal():
                            analog_dendritic_drive
                 ''')
 
-        input_signal.input_signals[self.name] = self             
+        input_signal.input_signals[self.name] = self   
 
             
 
@@ -814,6 +822,7 @@ class network():
                 # spike_signal.append(s[spot])
             spike_signals.append(spike_signal)
             count+=1
+            neuron.spike_times = neuron.spike_times/neuron.time_params['t_tau_conversion']
         spikes[0] = np.concatenate(spikes[0])
         spikes[1] = np.concatenate(spikes[1])
         self.spikes = spikes

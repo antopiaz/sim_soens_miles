@@ -83,10 +83,13 @@ def activity_plot(
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     if len(neurons) > 1:
+
         fig, axs = plt.subplots(len(neurons), 1,figsize=(size))
+        fig.subplots_adjust(hspace=0)
+
         for ii,n in enumerate(neurons): 
-            if ii != len(neurons)-1:
-                axs[ii].get_xaxis().set_visible(False)
+            # if ii != len(neurons)-1:
+            #     axs[ii].get_xaxis().set_visible(False)
 
             signal = n.dendrites[0][0][0].s
             refractory = n.neuron.dend__ref.s
@@ -115,7 +118,7 @@ def activity_plot(
                                     pass
                                 else:
                                     if weighting == True:
-                                        weight = dendrite.weights[i-1][j][k]
+                                        weight = n.weights[i-1][j][k]
                                         dend_s = dendrite.s*weight
                                     else:
                                         dend_s = dendrite.s
@@ -144,15 +147,15 @@ def activity_plot(
                              label='refractory signal')
 
             ## add input/output spikes
-            if spikes==True:
+            if spikes==True and hasattr(net,'spikes'):
 
-                ind = np.where(net.spikes[0]==ii)[0]
-                spike_times=np.array([net.spikes[1][i] for i in ind]).reshape(len(ind),)
+                # ind = np.where(net.spikes[0]==ii)[0]
+                # spike_times=np.array([net.spikes[1][i] for i in ind]).reshape(len(ind),)
                 
                 # rows = array_to_rows(net.spikes,2)
                 # print(rows)
                 axs[ii].plot(
-                    spike_times,net.spike_signals[ii],'xk', markersize=8,
+                    n.neuron.spike_times,n.neuron.s_th,'xk', markersize=8,
                     label='neuron fires'
                     )
                 axs[ii].axhline(
@@ -207,9 +210,12 @@ def activity_plot(
                 if any(ele < 0 for ele in phi_r):
                     plt.axhline(y = phi_ths[0], color = 'purple', linestyle = '--',
                                 linewidth=.5)
-            plt.plot(time_vec,phi_r, color = colors[1],linewidth=4, label=r'$\phi_r$ (soma)')
+            plt.plot(time_vec,phi_r, color = colors[1],linewidth=2, label=r'$\phi_r$ (soma)')
 
         if dend:
+            dend_names = [f"excitatory_{_}" for _ in range(9)]
+            dend_names.append("inhibitory")
+            count=0
             for i,layer in enumerate(neurons[0].dendrites):
                 if i < lay +1 :
                     for j,branch in enumerate(layer):
@@ -218,14 +224,16 @@ def activity_plot(
                                 pass
                             else:
                                 if weighting == True:
-                                    weight = dendrite.weights[i-1][j][k]
+                                    weight = neurons[0].weights[i-1][j][k]
                                     dend_s = dendrite.s*weight
                                 else:
                                     dend_s = dendrite.s
                                 plt.plot(
                                     time_vec,dend_s,'--', 
                                     label=f'w*dend.{i}.{j}.{k}'
+                                    # label = dend_names[count]
                                     )
+                                count+=1
                             if SPD==True:
                                 for spd in dendrite.synaptic_inputs:
                                     plt.plot(
@@ -238,11 +246,13 @@ def activity_plot(
             plt.plot(time_vec,refractory,':',color='r',label='refractory signal')
 
         ## add input/output spikes
-        if spikes==True:
-            if len(net.spikes[0]) > 0:
-                plt.plot(net.spikes[1],net.spike_signals[0],'xk', markersize=8, 
+        if spikes==True and hasattr(net,'spikes'):
+            s_th = neurons[0].neuron.s_th
+            spike_times = neurons[0].neuron.spike_times
+            if len(spike_times) > 0:
+                plt.plot(spike_times,np.ones(len(spike_times))*s_th,'xk', markersize=8, 
                          label='neuron fires')
-                plt.axhline(y = neurons[0].neuron.s_th, color = 'purple', 
+                plt.axhline(y = s_th, color = 'purple', 
                             linestyle = '--',label='Firing Threshold')
             if input:
                 plt.plot(
@@ -251,17 +261,17 @@ def activity_plot(
                     )
         if S == True:
             plt.plot(time_vec,signal,  color='#1f77b4',linewidth=4)
-        plt.xlabel("Simulation Time (ns)",fontsize=14)
-        plt.ylabel("Signal (Ic)",fontsize=14)
+        plt.xlabel("Simulation Time (ns)",fontsize=18)
+        plt.ylabel("Signal (Ic)",fontsize=18)
         plt.subplots_adjust(bottom=.25)
-        plt.title(title,fontsize=18)
-    if legend==True:
-        if legend_out==True:
-            plt.legend(loc='center left', bbox_to_anchor=(1, 1.2))
-            plt.subplots_adjust(right=.8)
-            plt.subplots_adjust(bottom=.15)
-        else:
-            plt.legend(loc=1)
+        plt.title(title,fontsize=12)
+        if legend==True:
+            if legend_out==True:
+                plt.legend(loc='upper left', bbox_to_anchor=(1, 1.01))
+                plt.subplots_adjust(right=.8)
+                # plt.subplots_adjust(bottom=.15)
+            else:
+                plt.legend(loc=1)
     plt.tight_layout()
     if path:
         plt.savefig(path)
@@ -490,9 +500,10 @@ def structure(node):
                 x_labels.append(f"layer {len(node.dendrites)-(i+1)}")
             groups.append(np.mean(g))
         G.append(groups)
-    plt.figure(figsize=(10,6))
+    plt.figure(figsize=(8,5))
 
-
+    # labels = ['Basal','Proximal']
+    count=0
     for i,dot1 in enumerate(dots):
         
         for ii,dot2 in enumerate(dots):
@@ -520,16 +531,18 @@ def structure(node):
 
         if to_dot[2]==len(arbor)-1 and to_dot!=dot1:
             # print("to soma")
+            
             plt.plot(
                 [x1,x2],[y1,y2],linestyle=line_style,
-                color=color,linewidth=width,label=f'branch {dot1[6]}'
+                color=color,linewidth=width,label=f'branch {dot1[6]}' #f"{labels[count]} Branch" 
                 )
+            count+=1
         else:
             plt.plot(
                 [x1,x2],[y1,y2],
                 linestyle=line_style,
                 color=color,
-                linewidth=width
+                linewidth=width*1.5
                 )
     
     if sum(Ns) > 30:
@@ -537,7 +550,8 @@ def structure(node):
         syn_values = np.array(syn_values)*8*15/sum(Ns)
 
     else:
-        ms = np.array([30,20,15,8])
+        # ms = np.array([30,20,15,8])
+        ms = np.array([30,20,11,11]) #NICEplot
         syn_values = np.array(syn_values)*200
 
 
@@ -559,8 +573,8 @@ def structure(node):
         Y_synapses,
         marker='>', 
         c=syn_colors,
-        s=syn_values,
-        label='Synapses'
+        s=75,#syn_values,
+        label='Synapses',
         )
 
     # plt.legend(borderpad=1)
@@ -569,13 +583,14 @@ def structure(node):
     plt.legend(borderpad=1,markerscale=.7)
 
     x_labels[-1] += " (soma)"
-    plt.xticks(x_ticks,x_labels,fontsize=12)
+    plt.xticks(x_ticks,x_labels,fontsize=14)
     plt.xlim(1-.1*len(arbor),len(arbor)*1.1)
     plt.ylim(1-y_factor,1+m*y_factor)
     plt.yticks([])
     plt.ylabel("Dendrites",fontsize=18)
     plt.xlabel("Layers",fontsize=18)
     plt.title("Dendritc Arbor",fontsize=20)
+    plt.tight_layout()
     plt.show()
 
 
@@ -660,6 +675,61 @@ def plot_basal_proximal(node,net,phir=False,dend=True,title=None,
     plt.subplots_adjust(bottom=.15)
     # plt.legend()
     plt.show()
+
+
+
+
+
+
+
+
+
+def plot_MNIST_nodes(nodes,digit,sample,run,name,path):
+    import os
+    try:
+        os.makedirs(path+name+'plots/')    
+    except FileExistsError:
+        pass
+    for n,node in enumerate(nodes):
+        lays = [[] for _ in range(len(node.dendrites))]
+        phays = [[] for _ in range(len(node.dendrites))]
+        for l,layer in enumerate(node.dendrites):
+            for g,group in enumerate(layer):
+                for d,dend in enumerate(group):
+                    lays[l].append(dend.s)
+                    phays[l].append(dend.phi_r)
+        # try:
+        #     plt.style.use('seaborn-muted')  
+        # except MatplotlibDeprecationWarning:
+        #     plt.style.use("seaborn-v0_8")
+
+        # plt.style.use('seaborn-muted')
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        plt.figure(figsize=(8,4))
+        for l,lay in enumerate(lays):
+            if l == 0:
+                lw = 4
+            else:
+                lw = 2
+            plt.plot(
+                np.mean(lay,axis=0),
+                linewidth=lw,
+                color=colors[l],
+                label=f'Layer {l} Mean Signal'
+                )
+            plt.plot(
+                np.mean(phays[l],axis=0),
+                '--',
+                linewidth=.5,
+                color=colors[l],
+                # label=f'Layer {l} Mean Flux'
+                )
+        plt.legend(loc='upper right')
+        plt.title(f'Node {n} - Digit {digit} Sample {sample} - Run {run}')
+        plt.savefig(path+name+f'plots/node_{n}_digit_{digit}_sample_{sample}_run_{run}.png')
+        plt.close()
+
+
 # =============================================================================
 # End plots added by Ryan
 # =============================================================================

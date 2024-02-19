@@ -83,10 +83,13 @@ class PointReservoir:
         self.run=False
         self.dt = 0.1
         self.tf = 360*9
+        self.w_coeff = 0.6
 
         # custom input params
         self.__dict__.update(params)
 
+        np.random.seed(self.run)
+        
         # make and potentially run neurons and network
         self.make_neurons(**params)
         self.make_net()
@@ -99,18 +102,7 @@ class PointReservoir:
         '''
         self.neurons = []
         w_sd = 1
-        syn_struct = [
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-            [[[w_sd]]],
-        ]
+        syn_struct = [ [[[np.random.rand()*self.w_coeff]]] for _ in range(10)]
         
         for i in range(self.N):
             neuron = SuperNode(
@@ -121,7 +113,6 @@ class PointReservoir:
 
     def make_net(self):
         self.connectivity = []
-        np.random.seed(self.run)
         connections = 0
         for i in range(self.N):
             for j in range(self.N):
