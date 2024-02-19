@@ -10,3 +10,5 @@ legacy/
 # sim_soens.egg-info/
 build/
 net_temp.jld2
+../.DS_Store
+../sim_soens/.DS_Store
