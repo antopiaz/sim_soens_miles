@@ -36,6 +36,11 @@ def numb_net_step(net,tau_vec,d_tau):
             for dend in node.dendrite_list:
                 # if hasattr(dend,'is_soma') and dend.threshold_flag == True:
                 
+                #print((dend.__dict__.keys()))
+                #print(dir(dend))
+                if hasattr(dend, "is_soma"):        
+                    print("ref ",dend.absolute_refractory_period_converted)
+                print("phi_r ", dend.phi_r)
                 numba_dendrite_updater(dend,i,tau_vec[i+1],d_tau)
 
             # update all output synapses
@@ -43,10 +48,10 @@ def numb_net_step(net,tau_vec,d_tau):
             #print(type(neuron.synaptic_outputs))
             
             synaptic_outputs = np.asarray(list(neuron.synaptic_outputs.values()))
-            #print(synaptic_outputs)
+            #print("tau vec " ,type(tau_vec))
 
             numba_output_synapse_updater(synaptic_outputs,i,tau_vec[i+1])
-            
+
             neuron = numba_spike(neuron,i,tau_vec)
                        
     #if net.timer==True:
@@ -164,6 +169,8 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
         if dend_obj.threshold_flag == True:
             update = False
             # wait for absolute refractory period before resetting soma
+            
+
             if (present_time - dend_obj.spike_times[-1] 
                 > dend_obj.absolute_refractory_period_converted): 
                 dend_obj.threshold_flag = False # reset threshold flag
