@@ -105,7 +105,7 @@ def run_python_backend(net):
         net = numb_net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
         
     else:
-        print("python backend")
+        #print("python backend")
         net = net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
 
     finish = time.perf_counter()

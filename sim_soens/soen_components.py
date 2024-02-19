@@ -15,11 +15,11 @@ from .soen_plotting import (
 )
 # p = physical_constants()
 
-import numba
-from numba import njit
+#import numba
+#from numba import njit
 
 print_dendrite = False
-print_neuron = True
+print_neuron = False
 
 class input_signal():
     '''
@@ -383,7 +383,10 @@ class synapse():
     def __del__(self):
         # print('synapse deleted')
         return
-    
+
+#neuron_fixed_integers = np.array
+#neuron_fixed_integers.append()
+
 #@njit
 class neuron():
     '''
