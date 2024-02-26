@@ -49,8 +49,7 @@ def numb_net_step(net,tau_vec,d_tau):
             #print(type(neuron.synaptic_outputs))
             
             synaptic_outputs = np.asarray(list(neuron.synaptic_outputs.values()))
-            #print("tau vec " ,type(tau_vec))
-
+            print(synaptic_outputs)
             numba_output_synapse_updater(synaptic_outputs,i,tau_vec[i+1])
 
             neuron = numba_spike(neuron,i,tau_vec)
@@ -182,13 +181,13 @@ def numba_dend_thresh(dend_obj,present_time):
         update = True
     return update
 
-
+#@jit(nopython=True)
 def dend_app_flux(d_keys, phi_r, time_index, d_strengths, dend_feed_str, s):
-
-    for key in d_keys:
+    for keys in (d_keys):
+        #(keys)
         phi_r[time_index+1] += (
-            d_keys[key].s[time_index] * 
-            d_strengths[key]
+            d_keys[keys].s[time_index] * 
+            d_strengths[keys]
             )
     phi_r[time_index+1] += (
         dend_feed_str * 
@@ -202,6 +201,21 @@ def dend_update(s, t, d_tau, alpha, beta, r_fq):
     s[t+1] = s[t] * ( 
                 1 - d_tau*alpha/beta
                 ) + (d_tau/beta) * r_fq
+    
+#@jit(nopython=True)
+def spike_check(_phi_spd, phi_spd, _st_ind, _st_ind_last, t, _phi_spd_memory, synaptic_connection_strengths, synapse_key):
+    if _st_ind - _st_ind_last == 1:
+        _phi_spd = np.max([_phi_spd,phi_spd[t]])
+        _phi_spd_memory = _phi_spd
+    if _phi_spd < _phi_spd_memory:
+        phi_spd[t+1] = _phi_spd_memory
+    else:
+        phi_spd[t+1] = (
+            _phi_spd * 
+            synaptic_connection_strengths[synapse_key]
+            )
+
+        _phi_spd_memory = 0
 
 #@jit(nopython=True)
 def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
@@ -215,14 +229,12 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     dend_obj.phi_r[time_index+1] = dend_obj.phi_r_external__vec[time_index+1]
     
     # applied flux from dendrites and also self-feedback
-
-    #d_keys = (dend_obj.dendritic_inputs)
-    #d_strengths = dend_obj.dendritic_connection_strengths
-    #phi_r = dend_obj.phi_r
  
-    #dend_feed_str = dend_obj.self_feedback_coupling_strength
     s= dend_obj.s
-    dend_app_flux(dend_obj.dendritic_inputs, dend_obj.phi_r, time_index, dend_obj.dendritic_connection_strengths, dend_obj.self_feedback_coupling_strength, s )
+    #DInputs = np.asarray(list(dend_obj.dendritic_inputs))
+    #print('inputs ', DInputs)
+    #DStrengths = np.asarray(list(dend_obj.dendritic_connection_strengths))
+    dend_app_flux(dend_obj.dendritic_inputs, dend_obj.phi_r, time_index, dend_obj.dendritic_connection_strengths , dend_obj.self_feedback_coupling_strength, s )
 
     # self-feedback
 
@@ -264,26 +276,17 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
             
 
                     # to avoid going too low when a new spike comes in
-                    print(type(syn_obj._phi_spd_memory))
-                    if _st_ind - syn_obj._st_ind_last == 1:
-                        _phi_spd = np.max([_phi_spd,syn_obj.phi_spd[time_index]])
-                        syn_obj._phi_spd_memory = _phi_spd
-                    if _phi_spd < syn_obj._phi_spd_memory:
-                        syn_obj.phi_spd[time_index+1] = syn_obj._phi_spd_memory
-                    else:
-                        syn_obj.phi_spd[time_index+1] = (
-                            _phi_spd * 
-                            dend_obj.synaptic_connection_strengths[synapse_key]
-                            )
+                    syn_con = np.asarray((list(dend_obj.synaptic_connection_strengths.values())))
+                    key_position = list(dend_obj.synaptic_inputs).index(synapse_key)
+                    spike_check(_phi_spd, syn_obj.phi_spd, _st_ind, syn_obj._st_ind_last, time_index, syn_obj._phi_spd_memory, syn_con, key_position)
 
-                        syn_obj._phi_spd_memory = 0
-                
+                   
             syn_obj._st_ind_last = _st_ind
                     
         dend_obj.phi_r[time_index+1] += syn_obj.phi_spd[time_index+1]
         
 
-    new_bias=dend_obj.bias_current
+    #new_bias=dend_obj.bias_current
 
     # find appropriate rate array indices
     lst = dend_obj.phi_r__vec[:] # old way    
@@ -330,6 +333,7 @@ def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
         #print("synapse key ", i)
 
         syn_out = synaptic_outputs[i]
+        print(syn_out)
         # find most recent spike time for this synapse
         _st_ind = np.where( present_time > syn_out.spike_times_converted[:] )[0]
         
