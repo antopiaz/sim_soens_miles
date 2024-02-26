@@ -35,12 +35,13 @@ def numb_net_step(net,tau_vec,d_tau):
             # update all input synapses and dendrites       
             for dend in node.dendrite_list:
                 # if hasattr(dend,'is_soma') and dend.threshold_flag == True:
-                
-                #print((dend.__dict__.keys()))
-                #print(dir(dend))
-                if hasattr(dend, "is_soma"):        
-                    print("ref ",dend.absolute_refractory_period_converted)
-                print("phi_r ", dend.phi_r)
+                #if i==1:
+                    #print((dend.__dict__.keys()))
+                    #print(dir(dend))
+                #if hasattr(dend, "is_soma"):        
+                #    print("ref ",dend.absolute_refractory_period_converted)
+                #print("phi_r ", dend.phi_r)
+                #print("sf  ", dend.self_feedback_coupling_strength)
                 numba_dendrite_updater(dend,i,tau_vec[i+1],d_tau)
 
             # update all output synapses
@@ -72,11 +73,11 @@ def numba_spike(neuron,ii,tau_vec):
     if neuron.dend_soma.s[ii+1] >= neuron.integrated_current_threshold:
         
         neuron.dend_soma.threshold_flag = True
-        print('yes')
-        print(neuron.dend_soma.threshold_flag)
-        print(neuron.name)
-        print(neuron.source_type)
-        print(neuron.synaptic_outputs)
+        #print('yes')
+        #print(neuron.dend_soma.threshold_flag)
+        #print(neuron.name)
+        #print(neuron.source_type)
+        #print(neuron.synaptic_outputs)
        
         neuron.dend_soma.spike_times = np.append(
             neuron.dend_soma.spike_times,
@@ -131,7 +132,7 @@ def numba_spike(neuron,ii,tau_vec):
                 # a prior spd event has occurred at this synapse
                                         
                 if len(syn_out[synapse_name].spike_times_converted) > 0:
-                    print('used')
+                    #print('used')
                     # the spd has had time to recover 
                     if (_ind - syn_out[synapse_name].spike_times_converted[-1] >= 
                         syn_out[synapse_name].spd_reset_time_converted): 
@@ -161,63 +162,99 @@ def numba_spike(neuron,ii,tau_vec):
                 
     return neuron
 
+
+#keep the arrays from dend, operate on them in small numba func, pass back to dend
+def numba_dend_thresh(dend_obj,present_time):
+
+    update=True
+    if hasattr(dend_obj, 'is_soma'):
+            if dend_obj.threshold_flag == True:
+                update = False
+                # wait for absolute refractory period before resetting soma
+                
+
+                if (present_time - dend_obj.spike_times[-1] 
+                    > dend_obj.absolute_refractory_period_converted): 
+                    dend_obj.threshold_flag = False # reset threshold flag
+                else: 
+                    update = True
+    else:
+        update = True
+    return update
+
+
+def dend_app_flux(d_keys, phi_r, time_index, d_strengths, dend_feed_str, s):
+
+    for key in d_keys:
+        phi_r[time_index+1] += (
+            d_keys[key].s[time_index] * 
+            d_strengths[key]
+            )
+    phi_r[time_index+1] += (
+        dend_feed_str * 
+        s[time_index]
+        )
+    return phi_r
+
+
+@jit(nopython=True)
+def dend_update(s, t, d_tau, alpha, beta, r_fq):
+    s[t+1] = s[t] * ( 
+                1 - d_tau*alpha/beta
+                ) + (d_tau/beta) * r_fq
+
 #@jit(nopython=True)
 def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     
     # make sure dendrite isn't a soma that reached threshold
-    if hasattr(dend_obj, 'is_soma'):
-        if dend_obj.threshold_flag == True:
-            update = False
-            # wait for absolute refractory period before resetting soma
-            
+   
+    update= numba_dend_thresh(dend_obj,present_time)
+    
 
-            if (present_time - dend_obj.spike_times[-1] 
-                > dend_obj.absolute_refractory_period_converted): 
-                dend_obj.threshold_flag = False # reset threshold flag
-        else: 
-            update = True
-    else:
-        update = True
-                        
     # directly applied flux
     dend_obj.phi_r[time_index+1] = dend_obj.phi_r_external__vec[time_index+1]
     
-    # applied flux from dendrites
-    for dendrite_key in dend_obj.dendritic_inputs:
-        dend_obj.phi_r[time_index+1] += (
-            dend_obj.dendritic_inputs[dendrite_key].s[time_index] * 
-            dend_obj.dendritic_connection_strengths[dendrite_key]
-            )  
-        # if hasattr(dend_obj, 'is_soma') and time_index == 250:
-        #     print(dendrite_key,dend_obj.dendritic_connection_strengths[dendrite_key])
+    # applied flux from dendrites and also self-feedback
+
+    #d_keys = (dend_obj.dendritic_inputs)
+    #d_strengths = dend_obj.dendritic_connection_strengths
+    #phi_r = dend_obj.phi_r
+ 
+    #dend_feed_str = dend_obj.self_feedback_coupling_strength
+    s= dend_obj.s
+    dend_app_flux(dend_obj.dendritic_inputs, dend_obj.phi_r, time_index, dend_obj.dendritic_connection_strengths, dend_obj.self_feedback_coupling_strength, s )
 
     # self-feedback
-    dend_obj.phi_r[time_index+1] += (
-        dend_obj.self_feedback_coupling_strength * 
-        dend_obj.s[time_index]
-        )
+
+    #dend_obj.phi_r[time_index+1] += (
+    #    dend_obj.self_feedback_coupling_strength * 
+    #    dend_obj.s[time_index]
+    #   )
     
     # applied flux from synapses
     for synapse_key in dend_obj.synaptic_inputs:
         syn_obj = dend_obj.synaptic_inputs[synapse_key]
-
+        
         # find most recent spike time for this synapse
         _st_ind = np.where( present_time > syn_obj.spike_times_converted[:] )[0]
 
         if len(_st_ind) > 0:
             
-            _st_ind = int(_st_ind[-1])
+            _st_ind = int(_st_ind[-1]) #length of syn spikes
+            
             if ( syn_obj.spike_times_converted[_st_ind] <= present_time # spike in past
                 and (present_time - syn_obj.spike_times_converted[_st_ind]) < 
                 syn_obj.spd_duration_converted  # spike within a relevant duration                
                 ):
                     _dt_spk = present_time - syn_obj.spike_times_converted[_st_ind]
                     
+
                     #print(type(syn_obj.phi_peak))
                     #print(type(syn_obj.tau_rise_converted))
                     #print(type(syn_obj.tau_fall_converted))
                     #print(type(syn_obj.hotspot_duration_converted))
 
+                    
                     _phi_spd = numba_spd_response(syn_obj.phi_peak, 
                                             syn_obj.tau_rise_converted,
                                             syn_obj.tau_fall_converted,
@@ -227,6 +264,7 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
             
 
                     # to avoid going too low when a new spike comes in
+                    print(type(syn_obj._phi_spd_memory))
                     if _st_ind - syn_obj._st_ind_last == 1:
                         _phi_spd = np.max([_phi_spd,syn_obj.phi_spd[time_index]])
                         syn_obj._phi_spd_memory = _phi_spd
@@ -264,16 +302,6 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     i_di__vec = np.asarray(dend_obj.i_di__subarray[_ind__phi_r]) # old way
 
 
-    # if dend_obj.pri == True:
-    #     lst = i_di__vec[:]
-    #     val = 2.7 - dend_obj.bias_current + dend_obj.s[time_index]
-    #     _ind__s = closest_index(lst,val)
-    # elif dend_obj.loops_present=='ri':
-    #     lst = i_di__vec[:]
-    #     val = (dend_obj.ib_max-new_bias+dend_obj.s[time_index])
-    #     _ind__s = closest_index(lst,val)
-    # else:
-
     lst =i_di__vec[:]
     val = dend_obj.s[time_index]
     _ind__s = numba_closest_index(lst,val)
@@ -284,10 +312,11 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
     r_fq = dend_obj.r_fq__subarray[_ind__phi_r][_ind__s] # old way 
 
     # update the signal of the dendrite
+
     if update == True:
-        dend_obj.s[time_index+1] = dend_obj.s[time_index] * ( 
-            1 - d_tau*dend_obj.alpha/dend_obj.beta
-            ) + (d_tau/dend_obj.beta) * r_fq
+        alpha = dend_obj.alpha
+        beta = dend_obj.beta
+        dend_update(s, time_index, d_tau, alpha, beta, r_fq)
 
     return
 
@@ -295,7 +324,7 @@ def numba_dendrite_updater(dend_obj,time_index,present_time,d_tau,HW=None):
 
 #@jit(nopython=True)
 def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
-    
+    #print("numba syn ")
     for i in range(len(synaptic_outputs)):
         
         #print("synapse key ", i)
@@ -328,7 +357,6 @@ def numba_output_synapse_updater(synaptic_outputs, time_index,present_time):
                     syn_out._phi_spd_memory = 0
                 
             syn_out._st_ind_last = _st_ind
-     
     return
 
 @jit(nopython=True)
