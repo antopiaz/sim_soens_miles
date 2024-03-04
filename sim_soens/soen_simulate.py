@@ -11,6 +11,7 @@ from sim_soens.soen_initialize import (
 )
 from .soen_py_stepper import *
 from .soen_numba_stepper import *
+from .simple_net_backend import *
 
 def run_soen_sim(net):
     '''
@@ -93,19 +94,24 @@ def run_python_backend(net):
             )
 
     finish = time.perf_counter()
-    if net.print_times: print(f"Initialization procedure run time: {finish-start}")
+    if net.print_times: print(f"Initialization procedure run time: {finish-start}") 
+
     net.init_time = finish-start
 
     start = time.perf_counter()
     
     if net.backend == 'numba':
         print("this is the numba backend")
-        print(type(net.time_params['tau_vec'][0]))
+        print(net.backend)
 
         net = numb_net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
+
+    elif net.backend =='simple':
+        print('simple backend')
+        net = simple_net_step(net) #, net.time_params['tau_vec'],net.time_params['d_tau'])
         
-    else:
-        #print("python backend")
+    elif net.backend=='python':
+        print("this is the python backend")
         net = net_step(net,net.time_params['tau_vec'],net.time_params['d_tau'])
 
     finish = time.perf_counter()
