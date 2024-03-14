@@ -13,7 +13,11 @@ import numba
 from numba import jit
 from sim_soens.soen_numba_stepper import *
 
+display=True
+
+
 def simple_net():
+    runs =1
     tf = 1000
     spike_times = np.arange(0,tf,100) 
     input_ = SuperInput(type='defined', defined_spikes=spike_times)
@@ -22,19 +26,15 @@ def simple_net():
     beta    = 2*np.pi*10**3
     s_th = 0.5
     dct1 = {
-        "weights":[[[.5,.4]]],
+        "weights":[[[.5,.5]]],
         "beta"      :beta,
         "beta_ni"   :beta,
         "beta_di"   :beta,
         "s_th"      :s_th,
     }
-    dct2 = {
-        "weights":[[[.5,.3]]],
-        "beta"      :beta,
-        "beta_ni"   :beta,
-        "beta_di"   :beta,
-        "s_th"      :s_th,
-    }
+    
+
+    
 
 
     node1 = SuperNode(name='node1', **dct1)
@@ -49,28 +49,39 @@ def simple_net():
 
     node1.uniform_input(input_)
 
+    
+
     net = network(
         sim         = True,            
         tf          = tf,  
-        nodes       = [node1,node2],          
-        backend     = "numba",
+        nodes       = [node1],          
+        backend     = "simple",
         print_times = True,
         dt          = 0.1
         )
-    print(node2.synapse_list[0].spike_times_converted)
+   
+    if(display==True):
+        #print(node2.synapse_list[0].spike_times_converted)
 
-    raster_plot(net.spikes)
+        #raster_plot(net.spikes)
 
-    node1.plot_structure()
-    node1.parameter_print()
-    node2.parameter_print()
-    node1.plot_neuron_activity(net=net,phir=True,spikes=False,ref=True,dend=True)
-    node2.plot_neuron_activity(net=net,phir=True,spikes=False,ref=True,dend=True)
+        #node1.plot_structure()
+        #node1.parameter_print()
 
-    print("components \n")
-    print(node2.synapse_list[0].__dict__)
-    plt.plot(node2.synapse_list[0].phi_spd)
-    plt.show()
+        #node2.parameter_print()
+        node1.plot_neuron_activity(net=net,phir=True,spikes=False,ref=True,dend=True)
+
+        node1.plot_arbor_activity(net=net,phir=True)
+
+        #node2.plot_neuron_activity(net=net,phir=True,spikes=False,ref=True,dend=True)
+
+        #print("components \n")
+        #print(node2.synapse_list[0].__dict__)
+        #plt.plot(node1.synapse_list[0].phi_spd)
+        #plt.show()
+       
+        plt.show()
 
 
 simple_net()
+#simple_net()

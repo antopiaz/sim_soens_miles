@@ -8,33 +8,53 @@ def simple_net_step(net):
     #phi = np.zeros(4)
     #print(net.time_params)
     for t in range(len(net.time_params['tau_vec'])-1):
-        present_time=net.time_params['tau_vec'][t-1]
+        #present_time= int(net.time_params['tau_vec'][t-1])
+        
+        present_time = t
+        #print('time ', present_time)
         count = 0
 
         for node in (net.nodes):
             neuron = node.neuron
             sum = 0
-            for dend in node.dendrite_list:
+            for dend in node.dendrite_list[::-1]:
             
-                for i in range(1):
+                
                     #print((dend.name))
-                    dend.phi = dend_update(dend, present_time)
-                    #print(dend.s)
-                    dend.s = (1/.466)*s_of_phi(dend.phi, dend.s) + dend.s*(1-(1/.466))
-                    count = count+1
+                dend.phi_r[present_time] = dend_update(dend, present_time, input)
+                #print(type(dend.phi))
+                #print(len(dend.s))
+
+                dend.s[present_time+1] = np.clip( (1/.466)*s_of_phi(dend.phi_r[present_time], dend.s[present_time]) + dend.s[present_time]*(1-(1/.466)), 0 ,0.72 )
+
+                if dend.s[present_time+1]==0 and present_time>100 and present_time<1500:
+                   dend.s[present_time+1]=np.max([dend.s[present_time-1], dend.s[present_time]])
+                
+                
+                count = count+1
                 
                 if not hasattr(dend, 'is_soma'):
-                    #print(dend.name)
-                    sum += dend.s*0.5
-                    print(sum)
+                    #print('dend ',dend.s[present_time])
+                    sum += dend.s[present_time]*0.5
+                    
+                    #print('sum ',sum)
 
                 if hasattr(dend, 'is_soma'):
-                    dend.s = sum
+                
+                    dend.s[present_time+1]= np.clip( (1/.466)*s_of_phi(sum, dend.s[present_time]) + dend.s[present_time]*(1-(1.0/.466)), 0, 0.72)
+                    if dend.s[present_time+1]==0 and present_time>100 and present_time<1500:
+                        dend.s[present_time+1]=np.max([dend.s[present_time-1], dend.s[present_time]])
+                    #print('soma ', dend.s[present_time+1])
+                        
+                if present_time==400:
+                    print('dend ',np.argmax(dend.s))
+                    print('dend t ', dend.s[np.argmax(dend.s)-10:np.argmax(dend.s)+10])
+                    print((1/.466)*s_of_phi(dend.phi_r[present_time], dend.s[present_time]) + dend.s[present_time]*(1-(1/.466)))
+                    
                     
     
            
-    print(count)
-    print()
+    #print(count)
     return net
 
 
@@ -42,24 +62,30 @@ def syn_update(syn):
     
     return 0
 
-def dend_update(dend, present_time):
+def dend_update(dend, present_time, input):
     '''
     why is the first synapse just empty?, 
     that's why we need to do the whole silly syn_key in syn_inputs
     '''
     phi=0
+    t=0
     for syn_key in dend.synaptic_inputs:
         syn = dend.synaptic_inputs[syn_key]
+        #print(syn.__dict__.keys())
         #print(syn.name)
         #print(present_time)
         #print((syn.spike_times_converted[:]))
+        #print(syn.input_signal.spike_times)
 
-        _st_ind = np.where( present_time > syn.spike_times_converted[:] )[0]
+        _st_ind =np.where( present_time > np.array(syn.input_signal.spike_times ))[-1]
 
         if(len(_st_ind)>0):
-            _st_ind = int(_st_ind[-1])
+            t = _st_ind[-1]
+            #print('std ', _st_ind)
 
-            phi = spd_response(0.5,0.02,50,0.04,_st_ind)
+            #_st_ind = int(_st_ind[-1])
+
+            phi = spd_response(0.5,0.02,50,0.04,t)
 
         
 
@@ -76,7 +102,7 @@ def dend_update(dend, present_time):
 def find_phi_th(val,A,B):
     return A*np.arccos(val/2) + B*(2-val)
 
-def s_of_phi(phi,s,A=1,B=.466,ib=1.8):
+def s_of_phi(phi,s,A=1,B=.466,ib=1.8):   #check approx func, if accurate
     # phi_th = find_phi_th(ib-s,.540,B)
     phi_th = -0.25*(ib-s) + 0.7
     r_fq = A*(phi-phi_th) #*(ib-s))
