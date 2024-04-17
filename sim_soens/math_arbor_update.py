@@ -5,7 +5,7 @@ from numpy import loadtxt
 import networkx as nx
 from math_sim import generate_graph, get_leaves, s_of_phi, plot_signal_flux
 
-t=250
+t=500
 n=13
 letters = [np.array([1,1,0,0,1,0,0,1,1,  0,0,0,0]), np.array([1,0,1,1,0,1,0,1,0  ,0,0,0,0]), np.array([0,1,0,1,0,1,1,0,1  ,0,0,0,0]) ] #adding a bunch of zeros
 #maybe extend or shorten one of the arrays later on but could be very expensive
@@ -68,13 +68,16 @@ def arbor_step(t,n,phi_spd, flux_offset):
     return plot_signals, plot_fluxes, weight_matrix, count
 
 
-def arbor_update_rule(letters,  learning_rate=.01):
+def arbor_update_rule(letters, i, learning_rate=.01):
     convergence = False
     flux_offset = np.zeros(n)
-    i=0
+    #i=0
+    spikes=[[1,0,0],
+                [0,2,0],
+                [0,0,4]]
+    expected_spikes =spikes[i]# [1,2,4]
     while convergence != True:
         
-        expected_spikes =[1,0,0]# [1,2,4]
         total_error = np.zeros(3)
 
 
@@ -82,7 +85,7 @@ def arbor_update_rule(letters,  learning_rate=.01):
 
             
         #print(letters[1])
-            training_spikes = [expected_spikes[i], 0 ,0]
+            #training_spikes = [expected_spikes[i], 0 ,0]
 
             plot_signals, plot_fluxes, weight_matrix, count = arbor_step(t,n,letters[k], flux_offset)
 
@@ -111,24 +114,38 @@ def arbor_update_rule(letters,  learning_rate=.01):
             print(count)
             #plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
             return flux_offset
-    
-flux = arbor_update_rule(letters)
+
+node_num=2
+flux = arbor_update_rule(letters,node_num)
             
-fluxz=  [-0.23624039, -0.22288985, -0.1056304,  -0.19017632, -0.14086677, -0.19017632,
- -0.09149359, -0.23624039, -0.22288985, -0.25441734, -0.33246438, -0.23923557,
- -0.21021379]
+#plot_signals, plot_fluxes, weight_matrix, count = arbor_step(t,n,letters[0], flux)
+
+plot_signals1, plot_fluxes1, weight_matrix, count1 = arbor_step(t,n,letters[0], flux)
+plot_signals2, plot_fluxes2, weight_matrix, count2 = arbor_step(t,n,letters[1], flux)
+plot_signals3, plot_fluxes3, weight_matrix, count3 = arbor_step(t,n,letters[2], flux)
+print(count1, count2, count3)
+#plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
+
+title_letter=['Z','V','N']   
+truncate = 0
+time_axis = np.arange(truncate,t)
+
+fig, axs = plt.subplots(3, figsize=(7,7))
+plt.suptitle(title_letter[node_num] + ' node')
+
+axs[0].plot(time_axis, plot_signals1[:,i][truncate:t], label='signal')
+axs[0].plot(time_axis, plot_fluxes1[:,i][truncate:t], label='fluxes')
+axs[0].set_title('z')
+
+axs[1].plot(time_axis, plot_signals2[:,i][truncate:t], label='signal')
+axs[1].plot(time_axis, plot_fluxes2[:,i][truncate:t], label='fluxes')
+axs[1].set_title('v')
+
+axs[2].plot(time_axis, plot_signals3[:,i][truncate:t], label='signal')
+axs[2].plot(time_axis, plot_fluxes3[:,i][truncate:t], label='fluxes')
+axs[2].set_title('n')
 
 
-
-flux2= [ 1.20087569,  0.  ,        1.20087569 , 1.20087569 , 0.    ,      1.20087569,
-  0.  ,        1.20087569 , 0.        ,  0.32111584 , 0.32111584, -0.33801419,
- -0.33471852]
-
-flux3 =  [ 0.98107378,  0.98107378,  0.      ,    0.     ,    0.98107378 , 0. ,
-  0.     ,     0.98107378 , 0.98107378 , 0.1237079 , -0.34240398 , 0.1237079,
- -0.32074186]
-
-plot_signals, plot_fluxes, weight_matrix, count = arbor_step(t,n,letters[2], flux)
-print(count)
-plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
-
+#axs.legend()
+#axs[i].set_title('node ' + str(i))
+plt.show()
