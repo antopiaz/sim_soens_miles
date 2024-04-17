@@ -75,7 +75,8 @@ def arbor_update_rule(letters, i, learning_rate=.01):
     spikes=[[1,0,0],
                 [0,2,0],
                 [0,0,4]]
-    expected_spikes =spikes[i]# [1,2,4]
+    #expected_spikes =spikes[i]# [1,2,4]
+    expected_spikes=[1,2,4]
     while convergence != True:
         
         total_error = np.zeros(3)
@@ -111,41 +112,48 @@ def arbor_update_rule(letters, i, learning_rate=.01):
         if total_error.any()==0:
             convergence=True
             print('flux ',flux_offset)
-            print(count)
+            #print(count)
             #plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
             return flux_offset
 
+'''
 node_num=2
 flux = arbor_update_rule(letters,node_num)
-            
-#plot_signals, plot_fluxes, weight_matrix, count = arbor_step(t,n,letters[0], flux)
+plot_signals, plot_fluxes, weight_matrix, count = arbor_step(t,n,letters[2], flux)
+print(count)
+plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
+'''
+node_num=2
+flux = arbor_update_rule(letters,node_num)
 
-plot_signals1, plot_fluxes1, weight_matrix, count1 = arbor_step(t,n,letters[0], flux)
-plot_signals2, plot_fluxes2, weight_matrix, count2 = arbor_step(t,n,letters[1], flux)
-plot_signals3, plot_fluxes3, weight_matrix, count3 = arbor_step(t,n,letters[2], flux)
-print(count1, count2, count3)
-#plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
+single_classifier=False            
+if single_classifier==True:
+    plot_signals1, plot_fluxes1, weight_matrix, count1 = arbor_step(t,n,letters[0], flux)
+    plot_signals2, plot_fluxes2, weight_matrix, count2 = arbor_step(t,n,letters[1], flux)
+    plot_signals3, plot_fluxes3, weight_matrix, count3 = arbor_step(t,n,letters[2], flux)
+    print(count1, count2, count3)
+    #plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
 
-title_letter=['Z','V','N']   
-truncate = 0
-time_axis = np.arange(truncate,t)
+    title_letter=['Z','V','N']   
+    truncate = 0
+    time_axis = np.arange(truncate,t)
 
-fig, axs = plt.subplots(3, figsize=(7,7))
-plt.suptitle(title_letter[node_num] + ' node')
+    fig, axs = plt.subplots(3, figsize=(7,7))
+    plt.suptitle(title_letter[node_num] + ' node')
 
-axs[0].plot(time_axis, plot_signals1[:,i][truncate:t], label='signal')
-axs[0].plot(time_axis, plot_fluxes1[:,i][truncate:t], label='fluxes')
-axs[0].set_title('z')
+    axs[0].plot(time_axis, plot_signals1[:,i][truncate:t], label='signal')
+    axs[0].plot(time_axis, plot_fluxes1[:,i][truncate:t], label='fluxes')
+    axs[0].set_title('z')
 
-axs[1].plot(time_axis, plot_signals2[:,i][truncate:t], label='signal')
-axs[1].plot(time_axis, plot_fluxes2[:,i][truncate:t], label='fluxes')
-axs[1].set_title('v')
+    axs[1].plot(time_axis, plot_signals2[:,i][truncate:t], label='signal')
+    axs[1].plot(time_axis, plot_fluxes2[:,i][truncate:t], label='fluxes')
+    axs[1].set_title('v')
 
-axs[2].plot(time_axis, plot_signals3[:,i][truncate:t], label='signal')
-axs[2].plot(time_axis, plot_fluxes3[:,i][truncate:t], label='fluxes')
-axs[2].set_title('n')
+    axs[2].plot(time_axis, plot_signals3[:,i][truncate:t], label='signal')
+    axs[2].plot(time_axis, plot_fluxes3[:,i][truncate:t], label='fluxes')
+    axs[2].set_title('n')
 
 
-#axs.legend()
-#axs[i].set_title('node ' + str(i))
-plt.show()
+    #axs.legend()
+    #axs[i].set_title('node ' + str(i))
+    plt.show()
