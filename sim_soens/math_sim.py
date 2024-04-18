@@ -14,7 +14,7 @@ data = loadtxt('phi_signal.csv', delimiter=',')
 
 
 phi_th=0.1675
-t=20000
+t=1000
 
 letters = [np.array([1,1,0,0,1,0,0,1,1]), np.array([1,0,1,1,0,1,0,1,0]), np.array([0,1,0,1,0,1,1,0,1]) ]
 letters = np.array(letters)
@@ -81,7 +81,7 @@ def neuron_step(t,n, data, random_weights=True):
     plot_fluxes = np.zeros((t,n))
 
     weight_matrix = generate_graph(n)
-
+    t_refractory=0
     
 
 
@@ -106,7 +106,15 @@ def neuron_step(t,n, data, random_weights=True):
         #    print('check ',signal_vector@weight_matrix)
         
         signal_vector = signal_vector*(1- (1e-9/1.2827820602389245e-12)*(.053733049288045114/(2*np.pi*1e3))) + ((1e-9/1.2827820602389245e-12)/(2*np.pi*1e3))*s_of_phi(flux_vector, signal_vector,n)
-        
+        if signal_vector[-1]>0.7:
+            signal_vector[-1]=0
+            #flux_vector[-1]=0
+            print(t)
+            t_refractory = i+10
+            print(i<t_refractory)
+        if i<t_refractory:
+            signal_vector[-1]=0
+            #flux_vector[-1]=0
         #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
     
         plot_signals[i] = signal_vector
@@ -239,8 +247,8 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
 
     
 
-#n=5
-#plot_signals,plot_fluxes,weight_matrix = neuron_step(t,n, data)
+n=10
+plot_signals,plot_fluxes,weight_matrix = neuron_step(t,n, data)
 
 #print('weights \n',weight_matrix)
 #print('fluxes ',signal_vector@weight_matrix)
@@ -248,5 +256,5 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
 #print('leaf ', leaf_nodes)
 #print('runtime ', run_time)
 #print('plot ', plot_signals[:,0])
-#plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
+plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
     

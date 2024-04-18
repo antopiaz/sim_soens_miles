@@ -55,15 +55,15 @@ def simple_net():
         sim         = True,            
         tf          = tf,  
         nodes       = [node1],          
-        backend     = "simple",
+        backend     = "numba",
         print_times = True,
         dt          = 0.1
         )
    
     if(display==True):
-        #print(node2.synapse_list[0].spike_times_converted)
+        print(node2.synapse_list[0].spike_times_converted)
 
-        #raster_plot(net.spikes)
+        raster_plot(net.spikes)
 
         #node1.plot_structure()
         #node1.parameter_print()
@@ -77,8 +77,8 @@ def simple_net():
 
         #print("components \n")
         #print(node2.synapse_list[0].__dict__)
-        #plt.plot(node1.synapse_list[0].phi_spd)
-        #plt.show()
+        plt.plot(node1.synapse_list[0].phi_spd)
+        plt.show()
        
         plt.show()
 
