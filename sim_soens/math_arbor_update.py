@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from numpy import loadtxt
 import networkx as nx
 from math_sim import generate_graph, get_leaves, s_of_phi, plot_signal_flux
+from numba import jit
+import time
+
 
 t=500
 n=13
@@ -25,7 +28,7 @@ for i in range(13):
 print(weight_matrix)
 
 
-
+@jit(nopython=True)
 def arbor_step(t,n,phi_spd, flux_offset):
     '''
     Iterates through time and updates flux and signal using the equation (signal_vector@weight_matrix) + leaf_nodes*data[i%10000]
@@ -45,9 +48,10 @@ def arbor_step(t,n,phi_spd, flux_offset):
     #print('matrix ',np.shape(weight_matrix))
     #print('leaf ', (leaf_nodes))
     #print('sig ', np.shape(signal_vector))
-
+    average = np.zeros(n)
     for i in range(t):
         #print('slice ',plot_signals[:])
+
         #print('avg ',flux_offset)
         flux_vector = (signal_vector@weight_matrix) + leaf_nodes*phi_spd + flux_offset#leaf_nodes*data[i%10000]
 
@@ -61,23 +65,28 @@ def arbor_step(t,n,phi_spd, flux_offset):
         if signal_vector[-1]>0.7:
             count += 1
             signal_vector[-1]=0
-            t_refractory = i+5
+            t_refractory = i+5 #unclear???
         if i<t_refractory:
             signal_vector[-1]=0
             #flux_vector[-1]=0
         #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
-    
+
+        #new average = old average + (next data - old average) / next count
+        #average = average + ((signal_vector[-1] - average)/(i+1))
+        average = average + signal_vector
+
         plot_signals[i] = signal_vector
         plot_fluxes[i] = flux_vector
-    
-    return plot_signals, plot_fluxes, weight_matrix, count
 
+    average  = average/t
+    return plot_signals, plot_fluxes, weight_matrix, count, average
 
+@jit(nopython=True)
 def arbor_update_rule(letters, i, learning_rate=.01, single_classifier=True):
     convergence = False
     flux_offset = np.zeros(n)
-    spikes=[[1,0,0],
-            [0,2,0],
+    spikes=[[4,0,0],
+            [0,4,0],
             [0,0,4]]
     
     if single_classifier:
@@ -87,10 +96,10 @@ def arbor_update_rule(letters, i, learning_rate=.01, single_classifier=True):
 
     while convergence != True:
         total_error = np.zeros(3)
-
+        
         for k in range(np.shape(letters)[0]):
 
-            plot_signals, plot_fluxes, weight_matrix, count = arbor_step(t,n,letters[k], flux_offset)
+            plot_signals, plot_fluxes, weight_matrix, count, average = arbor_step(t,n,letters[k], flux_offset)
 
             error=expected_spikes[k]-count #is error same as delta y? how to calculate
             
@@ -98,22 +107,42 @@ def arbor_update_rule(letters, i, learning_rate=.01, single_classifier=True):
             #print('total ',total_error)
 
             for j in range(n):
-                flux_offset[j] +=  learning_rate*np.average(plot_signals[:,j])*error  
+
+                #print(np.average(plot_signals[:,j]) - average[j])
+                #print(average)
+
+                #flux_offset[j] +=  learning_rate*np.average(plot_signals[:,j])*error 
+                flux_offset[j] +=  learning_rate*average[j]*error 
+
                 #* expected_signal[i]-plot_signals[i] #use a running average or an exact average? using plot signals?
                 #spikes from soma threshold
 
         if total_error.any()==0:
             convergence=True
-            print('flux ',flux_offset)
+            #print('flux ',flux_offset)
             #print(count)
             #plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
             return flux_offset
 
          
 node_num=2
-flux = arbor_update_rule(letters,node_num, single_classifier=True)
-plot_signals1, plot_fluxes1, weight_matrix, count1 = arbor_step(t,n,letters[0], flux)
+run_time=0
+for i in range(50):
+    t1 = time.perf_counter()
+
+    flux = arbor_update_rule(letters,node_num, single_classifier=True)
+    t2 = time.perf_counter()
+    run_time = run_time + t2 - t1
+
+print('run_time', run_time/50)
+
+#with calculated avg 0.165, 0.122 with numba 0.027
+#with numpy 0.172, 0.122 with numba 0.025
+
+plot_signals1, plot_fluxes1, weight_matrix, count1, average1 = arbor_step(t,n,letters[0], flux)
+'''
 plot_signals2, plot_fluxes2, weight_matrix, count2 = arbor_step(t,n,letters[1], flux)
+
 plot_signals3, plot_fluxes3, weight_matrix, count3 = arbor_step(t,n,letters[2], flux)
 print(count1, count2, count3)
 #plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
@@ -138,4 +167,4 @@ axs[2].plot(time_axis, plot_fluxes3[:,i][truncate:t], label='fluxes')
 axs[2].set_title('n')
 
 plt.show()
-
+'''

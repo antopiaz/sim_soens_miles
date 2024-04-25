@@ -12,9 +12,14 @@ data = loadtxt('phi_signal.csv', delimiter=',')
 #plt.plot(np.arange(0,10001), data)
 #plt.show()
 
+total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
+#plt.plot(np.arange(0,50000,1000), total_time_2)
+
+#plt.plot(np.arange(2,1020,30), total_time_1, "r")
+#plt.show()
 
 phi_th=0.1675
-t=1000
+t=50000
 
 letters = [np.array([1,1,0,0,1,0,0,1,1]), np.array([1,0,1,1,0,1,0,1,0]), np.array([0,1,0,1,0,1,1,0,1]) ]
 letters = np.array(letters)
@@ -67,6 +72,20 @@ def get_leaves(weight_matrix, n, random_val=True):
             
     return(leaf_nodes)
 
+@jit(nopython=True)
+def get_leaves_classic(weight_matrix, n):
+    '''
+    to find columns that are empty implying a leaf node
+    '''
+
+    leaf_nodes = np.zeros(n)
+               
+    for i in range(n-1):
+        if(weight_matrix[:,i].any()==0):
+                leaf_nodes[i]+=(round(random.random(),2))*0.7+0.3
+            
+    return(leaf_nodes)
+
 
 #iterate through time
 @jit(nopython=True)
@@ -77,6 +96,7 @@ def neuron_step(t,n, data, random_weights=True):
     '''
     #phi_spd=0.5
     #learning_rate=.01
+
     plot_signals = np.zeros((t,n))
     plot_fluxes = np.zeros((t,n))
 
@@ -85,7 +105,7 @@ def neuron_step(t,n, data, random_weights=True):
     
 
 
-    leaf_nodes = get_leaves(weight_matrix,n)
+    leaf_nodes = get_leaves_classic(weight_matrix,n)
     signal_vector = leaf_nodes*data[0]
 
     #print('plot ', np.shape(plot_signals))
@@ -109,11 +129,11 @@ def neuron_step(t,n, data, random_weights=True):
         if signal_vector[-1]>0.7:
             signal_vector[-1]=0
             #flux_vector[-1]=0
-            print(t)
-            t_refractory = i+10
-            print(i<t_refractory)
-        if i<t_refractory:
-            signal_vector[-1]=0
+            #print(t)
+            #t_refractory = i+10
+            #print(i<t_refractory)
+        #if i<t_refractory:
+        #    signal_vector[-1]=0
             #flux_vector[-1]=0
         #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
     
@@ -181,13 +201,19 @@ mode=''#'length'#'length'
 if(mode=='size'):
     print(mode)
     total_time = time_measure( data,t, mode="size")
+    #np.savetxt("time_perf1.csv", total_time, delimiter=",")
+
     print(np.shape(np.arange(2,1020,11)))
     plt.plot(np.arange(2,1020,30), total_time)
+    #plt.plot(np.arange(2,1020,30), total_time_1, "r")
+    
     plt.show()
 elif(mode=='length'):
     total_time = time_measure( data,t, mode="length")
-
+    #np.savetxt("time_perf2.csv", total_time, delimiter=",")
     plt.plot(np.arange(0,t,1000), total_time)
+    plt.plot(np.arange(0,t,1000), total_time_2, "r")
+
     plt.show()
 
 
@@ -196,7 +222,7 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
     '''
     Plots the signal flux and dendrite graph
     '''
-
+    #ylim
     truncate = 0
     time_axis = np.arange(truncate,t)
 
@@ -247,8 +273,8 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
 
     
 
-n=10
-plot_signals,plot_fluxes,weight_matrix = neuron_step(t,n, data)
+#n=10
+#plot_signals,plot_fluxes,weight_matrix = neuron_step(t,n, data)
 
 #print('weights \n',weight_matrix)
 #print('fluxes ',signal_vector@weight_matrix)
@@ -256,5 +282,5 @@ plot_signals,plot_fluxes,weight_matrix = neuron_step(t,n, data)
 #print('leaf ', leaf_nodes)
 #print('runtime ', run_time)
 #print('plot ', plot_signals[:,0])
-plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
+#plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
     
