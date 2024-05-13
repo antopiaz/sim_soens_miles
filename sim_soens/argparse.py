@@ -50,11 +50,13 @@ def setup_argument_parser():
     parser.add_argument( "--fan_buffer",        type=float,         default = 0        )
     parser.add_argument( "--dt",                type=float,         default = .1       )
     parser.add_argument( "--target",            type=int,           default = 10       )
+    parser.add_argument( "--off_target",        type=int,           default = 0        )
     parser.add_argument( "--max_offset",        type=str,           default = "phi_th" )    
     parser.add_argument( "--tiling",            type=bool,          default = None     )
     parser.add_argument( "--alternode",         type=str,           default = None     )
     parser.add_argument( "--weight_transfer",   type=str,           default = None     )
     parser.add_argument( "--offset_transfer",   type=str,           default = None     )
+    parser.add_argument( "--no_negative_jij",   type=bool,          default = False    )
 
 
 
