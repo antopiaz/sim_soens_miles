@@ -9,8 +9,8 @@ import time
 
 #phi_spd
 data = loadtxt('phi_signal.csv', delimiter=',')
-#plt.plot(np.arange(0,10001), data)
-#plt.show()
+plt.plot(np.arange(0,10001), data)
+plt.show()
 
 total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
 #plt.plot(np.arange(0,50000,1000), total_time_2)
@@ -19,12 +19,10 @@ total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
 #plt.show()
 
 phi_th=0.1675
-t=50000
+t=10000
 
-letters = [np.array([1,1,0,0,1,0,0,1,1]), np.array([1,0,1,1,0,1,0,1,0]), np.array([0,1,0,1,0,1,1,0,1]) ]
-letters = np.array(letters)
-
-
+#letters = [np.array([1,1,0,0,1,0,0,1,1]), np.array([1,0,1,1,0,1,0,1,0]), np.array([0,1,0,1,0,1,1,0,1]) ]
+#letters = np.array(letters)
 
 @jit(nopython=True)
 def s_of_phi(phi,s,n,A=1,B=.466,ib=1.8):
@@ -103,8 +101,6 @@ def neuron_step(t,n, data, random_weights=True):
     weight_matrix = generate_graph(n)
     t_refractory=0
     
-
-
     leaf_nodes = get_leaves_classic(weight_matrix,n)
     signal_vector = leaf_nodes*data[0]
 
@@ -125,9 +121,11 @@ def neuron_step(t,n, data, random_weights=True):
         #    print('check ', flux_vector)
         #    print('check ',signal_vector@weight_matrix)
         
+        #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
         signal_vector = signal_vector*(1- (1e-9/1.2827820602389245e-12)*(.053733049288045114/(2*np.pi*1e3))) + ((1e-9/1.2827820602389245e-12)/(2*np.pi*1e3))*s_of_phi(flux_vector, signal_vector,n)
         if signal_vector[-1]>0.7:
             signal_vector[-1]=0
+
             #flux_vector[-1]=0
             #print(t)
             #t_refractory = i+10
@@ -135,8 +133,7 @@ def neuron_step(t,n, data, random_weights=True):
         #if i<t_refractory:
         #    signal_vector[-1]=0
             #flux_vector[-1]=0
-        #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
-    
+
         plot_signals[i] = signal_vector
         plot_fluxes[i] = flux_vector
     
@@ -183,9 +180,12 @@ def time_measure(data, t, mode="length"):
 
     
     elif (mode=="size"):
-        for k in range(2,1020,30):
+        for k in range(2,6020,1000):
+
+            print(f"Run = {k}", end="\r")
+
             t1 = time.perf_counter()
-            plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t),k, data)
+            plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), k , data)
             t2 = time.perf_counter()
             run_time = t2-t1
             
@@ -203,8 +203,8 @@ if(mode=='size'):
     total_time = time_measure( data,t, mode="size")
     #np.savetxt("time_perf1.csv", total_time, delimiter=",")
 
-    print(np.shape(np.arange(2,1020,11)))
-    plt.plot(np.arange(2,1020,30), total_time)
+    #print(np.shape(np.arange(2,1020,11)))
+    plt.plot(np.arange(2,6020,1000), total_time)
     #plt.plot(np.arange(2,1020,30), total_time_1, "r")
     
     plt.show()
@@ -222,17 +222,25 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
     '''
     Plots the signal flux and dendrite graph
     '''
-    #ylim
     truncate = 0
     time_axis = np.arange(truncate,t)
 
     fig, axs = plt.subplots(n)
-
+    #plt.set_ylim(bottom=0)
+    #plt.ylim(top=1)
+    plt.subplots_adjust(left=0.1,
+                    bottom=0.1, 
+                    right=0.9, 
+                    top=0.9, 
+                    wspace=0.4, 
+                    hspace=0.8)
+    
     for i in range(n):
         axs[i].plot(time_axis, plot_signals[:,i][truncate:t], label='signal')
         axs[i].plot(time_axis, plot_fluxes[:,i][truncate:t], label='fluxes')
+        axs[i].set_ylim(0,1.2)
         #axs.legend()
-        #axs[i].set_title('node ' + str(i))
+        axs[i].set_title('node ' + str(i))
     plt.show()
 
     #fig, axs = plt.subplots(n)
@@ -248,17 +256,24 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
             if weight_matrix[:,i][j] !=0:
                 edges.append((j, i))
 
-    print(edges)
+    #print(edges)
     G = nx.DiGraph(directed=True)
     G.add_edges_from(
         edges)
-
-    values = np.ones(n)
-    values[n-1]+=1
-    print(values)
+    
+    edge_labels = dict([((n1, n2), np.around(weight_matrix[n1][n2], decimals=2))
+                    for n1, n2 in G.edges])
     pos = nx.planar_layout(G)
 
-    nx.draw_networkx(G,pos=pos)#, node_color=values)
+    nx.draw_networkx(G,pos)#, node_color=values)
+
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+    #values = np.ones(n)
+    #values[n-1]+=1
+    #print(values)
+    #pos = nx.planar_layout(G)
+
 
 
     plt.show()
@@ -273,14 +288,5 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
 
     
 
-#n=10
-#plot_signals,plot_fluxes,weight_matrix = neuron_step(t,n, data)
 
-#print('weights \n',weight_matrix)
-#print('fluxes ',signal_vector@weight_matrix)
-#print('signals ', signal_vector)
-#print('leaf ', leaf_nodes)
-#print('runtime ', run_time)
-#print('plot ', plot_signals[:,0])
-#plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n)
     
