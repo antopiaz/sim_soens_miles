@@ -19,24 +19,24 @@ total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
 #plt.show()
 
 phi_th=0.1675
-t=50000
+t=10000
 
 #letters = [np.array([1,1,0,0,1,0,0,1,1]), np.array([1,0,1,1,0,1,0,1,0]), np.array([0,1,0,1,0,1,1,0,1]) ]
 #letters = np.array(letters)
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def s_of_phi(phi,s,n,A=1,B=.466,ib=1.8):
     """
-    Function to get rate array 
+    Function to get rate array?
     """
     phi_th = 0.1675
-    r_fq = A*(phi-phi_th)*((B*ib)-s) #s vector, and phi  
-    indices = np.where(phi<phi_th)[0]   
-    for i in indices:
-        r_fq[i] = 0  #if phi from incoming node is below threshold then it passes on nothing
+    r_fq = A*(phi-phi_th)*((B*ib)-s) #s vector, and phi     
+    for i in range(n):
+        if phi[i]<phi_th: 
+            r_fq[i] = 0  #if phi from incoming node is below threshold then it passes on nothing
     return r_fq
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def generate_graph(n):
     '''
     Generate arbitrary tree graph using adjacency graph
@@ -51,7 +51,7 @@ def generate_graph(n):
     
     return weight_matrix
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def get_leaves(weight_matrix, n, random_val=True):
     '''
     to find columns that are empty implying a leaf node
@@ -70,7 +70,7 @@ def get_leaves(weight_matrix, n, random_val=True):
             
     return(leaf_nodes)
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def get_leaves_classic(weight_matrix, n):
     '''
     to find columns that are empty implying a leaf node
@@ -86,7 +86,7 @@ def get_leaves_classic(weight_matrix, n):
 
 
 #iterate through time
-#@jit(nopython=True)
+@jit(nopython=True)
 def neuron_step(t,n, data, random_weights=True):
     '''
     Iterates through time and updates flux and signal using the equation (signal_vector@weight_matrix) + leaf_nodes*data[i%10000]
@@ -197,7 +197,7 @@ def time_measure(data, t, mode="length"):
 
 
 
-mode='length'#'length'#'length'
+mode=''#'length'#'length'
 if(mode=='size'):
     print(mode)
     total_time = time_measure( data,t, mode="size")
@@ -213,7 +213,7 @@ elif(mode=='length'):
     #np.savetxt("time_perf2.csv", total_time, delimiter=",")
     plt.plot(np.arange(0,t,1000), total_time)
     plt.plot(np.arange(0,t,1000), total_time_2, "r")
-    print(total_time)
+
     plt.show()
 
 
