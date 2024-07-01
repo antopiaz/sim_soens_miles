@@ -3,19 +3,25 @@ import random
 import matplotlib.pyplot as plt
 from numpy import loadtxt
 import networkx as nx
-from numba import vectorize, jit, cuda
+from numba import jit, cuda
+from numba.cuda import random
+from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32
 #from pycuda import driver, compiler, gpuarray, tools
 import time
 #import pycuda.autoinit
 import cupy as cp
+from cupy import random
 
 
 
 #hello this is a test comment
 
-print('hello 1')
+print(cp.float32(.466))
 #phi_spd
 data = loadtxt('phi_signal.csv', delimiter=',')
+data = cp.float16(data)
+plt.plot(np.arange(0,10001), data)
+plt.savefig('phi_sig_plot.png', dpi=400, bbox_inches='tight')
 
 #total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
 #plt.plot(np.arange(0,50000,1000), total_time_2)
@@ -23,181 +29,139 @@ data = loadtxt('phi_signal.csv', delimiter=',')
 #plt.plot(np.arange(2,1020,30), total_time_1, "r")
 #plt.show()
 
-phi_th=0.1675
+#phi_th=0.1675
+phi_th=cp.float32(0.1675)
 t=1000
+
+d_tau = 1e-9/1.2827820602389245e-12
+d_tau = np.float32(d_tau)
+
+beta = 2*np.pi*1e3
+beta = cp.float32(beta) #different by .0002
+
+alpha = 0.053733049288045114
+alpha = np.float32(alpha)
+
+A=1
+print(type(beta))
+B=np.float32(.466)
+ib=np.float32(1.8)
+
+mempool = cp.get_default_memory_pool()
+pinned_mempool = cp.get_default_pinned_memory_pool()
 
 
 #@jit(nopython=True)
-def s_of_phi(phi,s,n,A=1,B=.466,ib=1.8):
+@cuda.jit
+def s_of_phi(phi,s,n, r_fq):
     """
     Function to get rate array 
     """
-    phi_th = 0.1675
-    r_fq = A*((phi-phi_th)*(((B*ib)-s))) #s vector, and phi 
-    indices = np.where(phi<phi_th)[0]
-    for i in indices:
-        r_fq[i] = 0  #if phi from incoming node is below threshold then it passes on nothing
-    return r_fq
-
-#@jit(nopython=True)
-def generate_graph(n):
-    '''
-    Generate arbitrary tree graph using adjacency graph
-    '''
-    weight_matrix = np.zeros((n,n)).astype(np.float32)
-    for i in range(n):
-        for j in range(i):  #graph connectivity problems
-            if weight_matrix[j].any() == 0: #why does this work?
-                value = random.randint(j+1,n-1)   # random.choice(np.arange(j+1,n,1))
-                weight_matrix[j][value]=(round(random.random(),2))*0.7+0.3
-                #weight_matrix[j][value]=0.5
     
-    return weight_matrix
-
-#@jit(nopython=True)
-def get_leaves(weight_matrix, n, random_val=True):
-    '''
-    to find columns that are empty implying a leaf node
-    '''
-
-    leaf_nodes = cp.zeros(n).astype(np.float32)
-    #if(random_val):            
-    for i in range(n-1):
-        if(weight_matrix[:,i].any()==0):
-                leaf_nodes[i]+=(round(random.random(),2))*0.7+0.3
-    '''
-    else:
-        for i in range(n-1):
-            if(weight_matrix[:,i].any()==0):
-                    leaf_nodes[i]+=0.5
-    '''
-            
-    return(leaf_nodes)
-
-@jit(nopython=True)
-def get_leaves_classic(weight_matrix, n):
-    '''
-    to find columns that are empty implying a leaf node
-    '''
-
-    leaf_nodes = np.zeros(n).astype(np.float32)
-               
-    for i in range(n-1):
-        if(weight_matrix[:,i].any()==0):
-                leaf_nodes[i]+=(round(random.random(),2))*0.7+0.3
-            
-    return(leaf_nodes)
-
-@cuda.jit
-def graph(n, out):
-    #start = cuda.grid(1)
-    #stride = cuda.gridsize(1)
     for i in range(n):
-        #for j in range(i):
-            #if (cp.all(out[j]==0) == True):
-            #value = numba.cuda.random.randint(j+1,n-1) 
-            #print(value)
-        out[i][i+1] = 0.6
-
-@cuda.jit
-def add(x, y, out):
-        start = cuda.grid(1)
-        stride = cuda.gridsize(1)
-        for i in range(start, x.shape[0], stride):
-                out[i] = x[i] + y[i]
+        r_fq[i] = A*(phi[i]-phi_th)*((B*ib)-s[i])
+    #r_fq = A*((phi-phi_th)*(((B*ib)-s))) #s vector, and phi
+    
+    #indices = np.where(phi<phi_th)[0]
+    #for i in indices:
+    #    r_fq[i] = 0  #if phi from incoming node is below threshold then it passes on nothing
+    for i in range(n):
+        if phi[i]<phi_th: 
+            r_fq[i] = 0
+    #return r_fq
 
 
 
-#iterate through time
+
 #@jit(nopython=True)
-def neuron_step(t,n, data,out, random_weights=True):
+def neuron_step(t,n, data):
     '''
     Iterates through time and updates flux and signal using the equation (signal_vector@weight_matrix) + leaf_nodes*data[i%10000]
     and signal is updated using the update equation (4) from phenom paper
     '''
     #phi_spd=0.5
     #learning_rate=.01
-    #t1 = time.perf_counter()
-    plot_signals = cp.zeros((t,n)).astype(np.float32)
-    plot_fluxes = cp.zeros((t,n)).astype(np.float32)
-    #t2 = time.perf_counter()
-    #print('init ', t2-t1)
 
-    #ta = time.perf_counter()
-    #weight_matrix = generate_graph(n)
-    #weight_matrix = cp.asarray(weight_matrix)
-    weight_matrix = out
-    t_refractory=0
-    #tb = time.perf_counter()
-    
-    leaf_nodes = get_leaves(weight_matrix,n)
-    #print(2*leaf_nodes_cpu)
+    #start_gpu = cp.cuda.Event()
+    #end_gpu= cp.cuda.Event() 
+
+    #tp1=time.perf_counter()
+    plot_signals =  cp.zeros((t,n), dtype=cp.float16)
+    plot_fluxes = 0#cp.zeros((t,n)).astype(np.float32)
+    #tp2=time.perf_counter()
+    #print('init', tp2-tp1)
+
+    #tw1 = time.perf_counter()
+    #weight_matrix = ((cp.random.rand(n,n, dtype=cp.float32))) / (n * 0.5/0.72)
+    weight_matrix = ((cp.full((n,n),0.5, dtype=cp.float16))) / (n * 0.5/0.72)
+    #weight_matrix = cp.full((n,n), 0.05, dtype=cp.float16)
+    cp.fill_diagonal(weight_matrix,0) #eye 
+    weight_matrix[n-1] = 0
+    weight_matrix[0,1]=1
+
+    #weight_matrix = cp.clip(weight_matrix,0,1)
+    #tw2 = time.perf_counter()
+    #print('weight time', tw2-tw1)
+    #print('weight',(weight_matrix))
+
+    #tl1 = time.perf_counter()
+    #leaf_nodes = ((cp.random.rand(n, dtype=cp.float32))-0.95) *(0.5/0.72)
+
+    test1 = cp.ones(int(n*0.05),dtype=cp.float16)
+    test2 = cp.zeros(int(n-(n*0.05)),dtype=cp.float16)
+    leaf_nodes=cp.append(test1,test2)
+    #print(test3)
+    #print(cp.count_nonzero(test3))
+
+    leaf_nodes[n-1] = 0
+    leaf_nodes[0]=1
+
+    leaf_nodes = cp.clip(leaf_nodes,0,1)
+    #tl2 = time.perf_counter()
+    #print('leaf_nodes', tl2-tl1)
+    print('leaf',cp.dtype(leaf_nodes))
+
     signal_vector = leaf_nodes*data[0]
-   
-    #print('init 2 a', tb-ta)
-    #a_gpu = gpuarray.to_gpu(signal_vector)
-    #b_gpu = gpuarray.to_gpu(weight_matrix)
-    #leaf_nodes = gpuarray.to_gpu(leaf_nodes_cpu)
-
-
-    #print('plot ', np.shape(plot_signals))
-    #print('matrix ',np.shape(weight_matrix))
-    #print('leaf ', (leaf_nodes))
-    #print('sig ', np.shape(signal_vector))
-
+    #print('sig', cp.dtype(signal_vector))
+    #ta = time.perf_counter()
+    print('used bytes',mempool.used_bytes())
+    print('total bytes',mempool.total_bytes())
+    print('cpu mem?',pinned_mempool.n_free_blocks())
     for i in range(t):
+        print(f"Timestep = {i}", end="\r")
+       
         #flux_offset =  learning_rate*np.average(plot_signals[:,i]) #* expected_signal[:][i]-plot_signals[:][i] #use a running average or an exact average? using plot signals?
-        #print('slice ',plot_signals[:,i])
-        #print('avg ',flux_offset)
-        
-        #c_gpu = matmul(a_gpu,b_gpu, MATRIX_SIZE=n)
-        #print('type', (c_gpu[0]))
+        flux_vector=(cp.matmul(signal_vector, weight_matrix)+(leaf_nodes * data[i%10000]))
+        #flux_vector= flux_vector/(cp.max(flux_vector[-1])+1)
 
-        #flux_vector = (c_gpu[0]) + leaf_nodes*data[i%10000]
-        #print()
-        #t3 = time.perf_counter()
-        flux_vector=cp.add(cp.matmul(signal_vector, weight_matrix),cp.multiply(leaf_nodes,data[i%10000]))
-        #t4 = time.perf_counter()
-        #if i==500:
-        #    print('flux time ', t4-t3)
-
-        #t1 = time.perf_counter()
-        #cp.matmul(signal_vector, weight_matrix)
-        #t2 = time.perf_counter()
-        #print('cupy', t2-t1)
-
-        #t3 = time.perf_counter()
-        #signal_vector@weight_matrix
-        #t4 = time.perf_counter()
-        #print('normal', t4-t3)
-
-
-        #if(i==162):
-        #    print(data[i])
-        #    print('leaf checl ', leaf_nodes*data[i])
-        #    print('check ', flux_vector)
-        #    print('check ',signal_vector@weight_matrix)
-        
         #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
-        #t5 = time.perf_counter()
-        signal_vector = cp.add(cp.multiply(signal_vector,(1- (1e-9/1.2827820602389245e-12)*(.053733049288045114/(2*np.pi*1e3)))),cp.multiply(s_of_phi(flux_vector, signal_vector,n), ((1e-9/1.2827820602389245e-12)/(2*np.pi*1e3))))
-        #t6 = time.perf_counter()
-        #if i==500:
-        #    print('signal time ', t6-t5)
+        #signal_vector = cp.add(cp.multiply(signal_vector,(1- (1e-9/1.2827820602389245e-12)*(.053733049288045114/(2*np.pi*1e3)))),cp.multiply(s_of_phi(flux_vector, signal_vector,n), ((1e-9/1.2827820602389245e-12)/(2*np.pi*1e3))))
+        
+        r_fq = cp.zeros(n, dtype=cp.float16)
+        s_of_phi[32,32](flux_vector, signal_vector,n, r_fq)
 
-        #t7 = time.perf_counter()
-        #if signal_vector[-1]>0.7:
-        #    signal_vector[-1]=0
-        #t8 = time.perf_counter()
-        #if i==500:
-        #    print('check time', t8-t7)
+        #indices = cp.where(r_fq<phi_th)[0]
+        #print(indices)
 
-        #tc=time.perf_counter()
+        signal_vector = signal_vector*(1 - d_tau*alpha/beta) + (d_tau/beta )*r_fq
+        #cp.clip(signal_vector,0,0.5)
+
+        #if signal_vector[n-1]>0.7:
+        #    signal_vector[n-1]=0
+        
+        #print('flux',flux_vector[200])
+        #print('signal',signal_vector[200])
+        #print('max',cp.max(signal_vector))
         plot_signals[i] = signal_vector
-        plot_fluxes[i] = flux_vector
-        #td=time.perf_counter()
-        #print(td-tc)
-    
+        #plot_fluxes[i] = flux_vector
+
+    #tb = time.perf_counter()
+    #print('runtime', tb-ta)
+    print('>< after')
+    print('used bytes',mempool.used_bytes())
+    print('total bytes',mempool.total_bytes())
+    print('cpu mem?',pinned_mempool.n_free_blocks())
+
     return plot_signals, plot_fluxes, weight_matrix
 
 
@@ -251,7 +215,7 @@ def time_measure(data, t, mode="length"):
 
             start_gpu.record()
             t1 = time.perf_counter()
-            
+
             out = cp.zeros((k,k))
             graph[32,64](k,out)
             plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), k , data,out)
@@ -273,7 +237,7 @@ def time_measure(data, t, mode="length"):
 
 
 
-mode='size'
+mode=''
 if(mode=='size'):
     print(mode)
     total_time = time_measure( data,t, mode="size")
@@ -359,68 +323,55 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
     plt.savefig('test_plot2.png', dpi=400, bbox_inches='tight')
 
 
-n=20
-'''
-print(type(n))
-weight_matrix = generate_graph(n)
-print(type(weight_matrix[0][0]))
-t_refractory=0
-
-leaf_nodes = get_leaves(weight_matrix,n)
-print(type(leaf_nodes[0]))
-signal_vector = leaf_nodes*data[200]
-print(type(signal_vector[0]))
-print(type(data[0]))
-'''
-#c_cpu = np.dot(signal_vector, weight_matrix)
-#a_gpu = gpuarray.to_gpu(signal_vector)
-#b_gpu = gpuarray.to_gpu(weight_matrix)
-
-#c_gpu = cp.matmul(signal_vector, weight_matrix) + leaf_nodes[0]
-#print(c_gpu.device)
-#c_gpu = matmul(a_gpu,b_gpu)
 
 
-'''
-# print the results
-print ("-" * 80)
-print ("Matrix A (GPU):")
-print (a_gpu.get())
-
-print ("-" * 80)
-print ("Matrix B (GPU):")
-print (b_gpu.get())
-
-print ("-" * 80)
-print ("Matrix C (GPU):")
-print (c_gpu.get())
-print(c_cpu)
-
-print ("-" * 80)
-print ("CPU-GPU difference:")
-print (c_cpu - c_gpu.get())
-'''
-
-
-#flux_vector = (signal_vector@weight_matrix) + leaf_nodes*data[0]
-#print(flux_vector)
-#print(type(flux_vector[0]))
-
-#tmat = generate_graph(n)
-#print(type(tmat[0][0]))
-
-#plot_signals, plot_fluxes, weight_matrix1 = neuron_step(t,n, data)
-#plot_signal_flux(cp.asnumpy(plot_signals), cp.asnumpy(plot_fluxes),cp.asnumpy(weight_matrix1), t, n)
 
 
 #test_array = [1,0,1,0,0.5,1,0.6]
 #test_array_gpu = cp.asarray(test_array)
 
-#indices = np.where(test_array_gpu<0.7)[0]
+print('used bytes',mempool.used_bytes())
+print('total bytes',mempool.total_bytes())
+print('cpu mem?',pinned_mempool.n_free_blocks())
+print('^ before')
+k=40000
+#tt1 = time.perf_counter()
+#test = cp.random.rand(k,k)
+#tt2 = time.perf_counter()
+#print('cp rand', tt2-tt1)
+#print('orig',test)
+#cp.fill_diagonal(test,0)
+#print('diag',test)
+t1 = time.perf_counter()
 
-#print(indices)
 
-    
+
+plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), k , data)
+t2 = time.perf_counter()
+print('time',t2-t1)
+print('count',cp.count_nonzero(weight_matrix)/(k**2))
+print(weight_matrix)
+print('sum',cp.sum(weight_matrix[:,1]))
+time_axis = np.arange(t)
+#plt.plot(time_axis, cp.asnumpy(plot_signals)[:,0], label='fluxes')
+#plt.savefig('test_plot4.png', dpi=400, bbox_inches='tight')
+#print(cp.asnumpy(plot_fluxes[:,k-1]))
+fig, axs = plt.subplots(6)
+axs[0].plot(time_axis, cp.asnumpy(plot_signals)[:,0], label='node 0')
+axs[1].plot(time_axis, cp.asnumpy(plot_signals)[:,1], label='node 10')
+#axs[2].plot(time_axis, cp.asnumpy(plot_signals)[:,100], label='node 100')
+#axs[3].plot(time_axis, cp.asnumpy(plot_signals)[:,1000], label='node 1000')
+axs[4].plot(time_axis, cp.asnumpy(plot_signals)[:,2500], label='node 2500')
+axs[5].plot(time_axis, cp.asnumpy(plot_signals)[:,k-1], label='soma')
+
+#for i in range(6):
+    #axs[i].set_ylim(0,1.2)
+    #axs[i].set_xlim(0,2000)
+
+plt.savefig('test_plot_scratch1.png', dpi=400, bbox_inches='tight')
+
+
+
 
 
     

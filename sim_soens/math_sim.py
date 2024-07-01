@@ -9,17 +9,17 @@ import time
 
 #phi_spd
 data = loadtxt('phi_signal.csv', delimiter=',')
-plt.plot(np.arange(0,10001), data)
-plt.show()
+#plt.plot(np.arange(0,10001), data)
+#plt.show()
 
-total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
+#total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
 #plt.plot(np.arange(0,50000,1000), total_time_2)
 
 #plt.plot(np.arange(2,1020,30), total_time_1, "r")
 #plt.show()
 
 phi_th=0.1675
-t=10000
+t=1000
 
 #letters = [np.array([1,1,0,0,1,0,0,1,1]), np.array([1,0,1,1,0,1,0,1,0]), np.array([0,1,0,1,0,1,1,0,1]) ]
 #letters = np.array(letters)
@@ -104,27 +104,19 @@ def neuron_step(t,n, data, random_weights=True):
     leaf_nodes = get_leaves_classic(weight_matrix,n)
     signal_vector = leaf_nodes*data[0]
 
-    #print('plot ', np.shape(plot_signals))
-    #print('matrix ',np.shape(weight_matrix))
-    #print('leaf ', (leaf_nodes))
-    #print('sig ', np.shape(signal_vector))
+   
 
     for i in range(t):
         #flux_offset =  learning_rate*np.average(plot_signals[:,i]) #* expected_signal[:][i]-plot_signals[:][i] #use a running average or an exact average? using plot signals?
-        #print('slice ',plot_signals[:,i])
-        #print('avg ',flux_offset)
+        #print(i)
         flux_vector = (signal_vector@weight_matrix) + leaf_nodes*data[i%10000]
 
-        #if(i==162):
-        #    print(data[i])
-        #    print('leaf checl ', leaf_nodes*data[i])
-        #    print('check ', flux_vector)
-        #    print('check ',signal_vector@weight_matrix)
+        
         
         #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
         signal_vector = signal_vector*(1- (1e-9/1.2827820602389245e-12)*(.053733049288045114/(2*np.pi*1e3))) + ((1e-9/1.2827820602389245e-12)/(2*np.pi*1e3))*s_of_phi(flux_vector, signal_vector,n)
-        if signal_vector[-1]>0.7:
-            signal_vector[-1]=0
+        #if signal_vector[-1]>0.7:
+        #    signal_vector[-1]=0
 
             #flux_vector[-1]=0
             #print(t)
@@ -188,7 +180,7 @@ def time_measure(data, t, mode="length"):
             plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), k , data)
             t2 = time.perf_counter()
             run_time = t2-t1
-            
+            print(run_time)
 
             time_array=np.append(time_array, run_time)
             #print(time_array)
@@ -197,24 +189,24 @@ def time_measure(data, t, mode="length"):
 
 
 
-mode=''#'length'#'length'
+mode='size'#'length'#'length'
 if(mode=='size'):
     print(mode)
     total_time = time_measure( data,t, mode="size")
     #np.savetxt("time_perf1.csv", total_time, delimiter=",")
-
     #print(np.shape(np.arange(2,1020,11)))
-    plt.plot(np.arange(2,6020,1000), total_time)
+    #plt.plot(np.arange(2,6020,1000), total_time)
     #plt.plot(np.arange(2,1020,30), total_time_1, "r")
     
-    plt.show()
+    #plt.show()
 elif(mode=='length'):
     total_time = time_measure( data,t, mode="length")
+    
     #np.savetxt("time_perf2.csv", total_time, delimiter=",")
     plt.plot(np.arange(0,t,1000), total_time)
-    plt.plot(np.arange(0,t,1000), total_time_2, "r")
+    #plt.plot(np.arange(0,t,1000), total_time_2, "r")
 
-    plt.show()
+    #plt.show()
 
 
 #plot
@@ -281,9 +273,10 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
 
 
 
-
-
-
+t1 = time.perf_counter()
+plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), 3000 , data)
+t2 = time.perf_counter()
+print(t2-t1)
 #print(get_leaves(weight_matrix,13, random_val=False))
 
     
