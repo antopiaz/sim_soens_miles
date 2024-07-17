@@ -11,33 +11,19 @@ import cupy as cp
 from cupy import random
 from cupy import cuda as cua
 
+#np.set_printoptions(threshold=np.inf)
 
-
-#hello this is a test comment
-
-#print(cp.float16(.466))
 #phi_spd
 data = loadtxt('phi_signal.csv', delimiter=',')
 data = cp.float16(data)
 #plt.plot(np.arange(0,10001), data)
-#plt.savefig('phi_sig_plot.png', dpi=400, bbox_inches='tight')
+#plt.savefig('input_sig.png', dpi=400, bbox_inches='tight')
 
-#total_time_2 = loadtxt('time_perf2.csv', delimiter=',')
-#plt.plot(np.arange(0,50000,1000), total_time_2)
-
-#plt.plot(np.arange(2,1020,30), total_time_1, "r")
-#plt.show()
-
-#phi_th=0.1675
-phi_th=(0.1675)
-t=1000
-
+#physical constants
+phi_th=0.1675
 d_tau = cp.float32(1e-9/1.2827820602389245e-12)
-
 beta = cp.float32(2000*np.pi)
-
 alpha = cp.float32(0.053733049288045114)
-
 A=cp.float32(1)
 B=cp.float32(.466)
 ib=cp.float32(1.8)
@@ -45,11 +31,15 @@ ib=cp.float32(1.8)
 #mempool = cp.get_default_memory_pool()
 #pinned_mempool = cp.get_default_pinned_memory_pool()
 
-#@jit(nopython=True)
+#time and size parameters
+t=2000
+k=700 #same as n
+neuron_size = 7
+
 @cuda.jit
 def s_of_phi(phi,s,n, r_fq):
     """
-    Function to get rate array 
+    Function to approximate rate array 
     """
     for i in range(n):
         if phi[i]<phi_th: 
@@ -57,97 +47,104 @@ def s_of_phi(phi,s,n, r_fq):
         else:
             r_fq[i] = A*(phi[i]-phi_th)*((B*ib)-s[i])
         
-        #if phi[i+1]<phi_th: 
-        #    r_fq[i+1] = 0
-        #else:
-        #    r_fq[i+1] = A*(phi[i+1]-phi_th)*((B*ib)-s[i+1])
+@cuda.jit
+def spike_check(signal_vector, somas, spike_check_arr):
+    """
+    Iterates through all the soma's to check if their signal is above threshold
+    """
+    for j in range(int(k/neuron_size)):
+        if signal_vector[somas[j]]>0.7:
+            signal_vector[somas[j]]=0
+            spike_check_arr[somas[j]]=1
     
-    #indices = np.where(phi<phi_th)[0]
-    #for i in indices:
-    #    r_fq[i] = 0  #if phi from incoming node is below threshold then it passes on nothing
-    #return r_fq
 
-k=30000
 
-t3=time.perf_counter()
-S = scipy.sparse.random(k, k, density=0.003, dtype=np.float32)
-S = S.toarray()
-S = cp.asarray(S)
-print(S.device)
-t4=time.perf_counter()
-print('init',t4-t3)
+test = cp.full((k,k), 0, dtype=cp.float16)
+mini = [[0, 0.6, 0, 0,   0,   0,   0],
+        [0, 0,   0, 0.5, 0,   0,   0],
+        [0, 0,   0, 0.7, 0,   0,   0],
+        [0, 0,   0, 0,   0.7, 0,   0],
+        [0, 0,   0, 0,   0,   0.5, 0],
+        [0, 0,   0, 0,   0,   0,   0.7],
+        [0, 0,   0, 0,   0,   0,   0,]]
+mini = cp.asarray(mini)
 
-#@jit(nopython=True)
+for i in range(0,k,neuron_size):
+    test[i:i+neuron_size, i:i+neuron_size]=mini
+
+
+som = cp.zeros(int(k/neuron_size), dtype=int)
+som[0] = neuron_size-1
+for i in range(1,int(k/neuron_size)):
+    som[i]=(som[i-1]+neuron_size)
+
 def neuron_step(t,n, data):
     '''
     Iterates through time and updates flux and signal using the equation (signal_vector@weight_matrix) + leaf_nodes*data[i%10000]
     and signal is updated using the update equation (4) from phenom paper
     '''
-    #phi_spd=0.5
-    #learning_rate=.01
+    spike_check_arr = cp.zeros(n, dtype=int)
+    t_spike = cp.zeros(n, dtype=int)
+    somas = som
 
     start_gpu = cp.cuda.Event()
     end_gpu= cp.cuda.Event() 
     
     plot_signals =  cp.zeros((t,n), dtype=cp.float16)
-    plot_fluxes = 0#cp.zeros((t,n)).astype(np.float32)
+    plot_fluxes = cp.zeros((t,n), dtype=cp.float16)
 
     #weight_matrix = ((cp.random.rand(n,n, dtype=cp.float32))) / (n * 0.5/0.72)
-    #weight_matrix = ((cp.full((n,n),0.5, dtype=cp.float16))) / (n * 0.5/0.72)
-    #weight_matrix = cp.full((n,n), 0.0001, dtype=cp.float16)
-    #, random_state=0)
-    weight_matrix = S
+    weight_matrix = test
     cp.fill_diagonal(weight_matrix,0) #eye 
     weight_matrix[n-1] = 0
-    weight_matrix[0,1] = 1
 
     #leaf_nodes = ((cp.random.rand(n, dtype=cp.float32))-0.95) *(0.5/0.72)
-    test1 = cp.ones(int(n*0.01),dtype=cp.float16)
-    test2 = cp.zeros(int(n-(n*0.01)),dtype=cp.float16) #array slicing by steps, to insert 1's
-    leaf_nodes=cp.append(test1,test2)
+    leaf_nodes = cp.zeros(k)
+    leaf_nodes[0:k:neuron_size]= 0.7
+    leaf_nodes[2:k:neuron_size]= 0.7
     leaf_nodes[n-1] = 0
-    leaf_nodes[0] = 1
-    #leaf_nodes = cp.clip(leaf_nodes,0,1)
 
     signal_vector = leaf_nodes*data[0]
     #print('used bytes',mempool.used_bytes())
     #print('total bytes',mempool.total_bytes())
     #print('cpu mem?',pinned_mempool.n_free_blocks())
+    print(weight_matrix)
+    #print(leaf_nodes)
+
     for i in range(t):
         #print(f"Timestep = {i}", end="\r") 
 
         #flux_offset =  learning_rate*np.average(plot_signals[:,i]) #* expected_signal[:][i]-plot_signals[:][i] #use a running average or an exact average? using plot signals?
-        #start_gpu.record()
-
         flux_vector=(cp.matmul(signal_vector, weight_matrix))+(leaf_nodes * data[i%10000])
-        #flux_vector= flux_vector/(cp.max(flux_vector[-1])+1)
-        #end_gpu.record()
-        #end_gpu.synchronize()
-        #t_gpu1 = cua.get_elapsed_time(start_gpu, end_gpu)
-        #print(t_gpu1)    
+
+        if(cp.max(spike_check_arr)==1):
+            for x in cp.where(spike_check_arr==1)[0]:
+                if  t_spike[x]<20:
+                    flux_vector[(x+2)%(k-1)]+=0.5
+                    t_spike[x] +=1
+                else:
+                    spike_check_arr[x] = 0
+                    t_spike[x]=0
+
         #dend.s[t_idx+1] = dend.s[t_idx]*(1 - d_tau*dend.alpha/dend.beta) + (d_tau/dend.beta)*r_fq
         #signal_vector = cp.add(cp.multiply(signal_vector,(1- (1e-9/1.2827820602389245e-12)*(.053733049288045114/(2*np.pi*1e3)))),cp.multiply(s_of_phi(flux_vector, signal_vector,n), ((1e-9/1.2827820602389245e-12)/(2*np.pi*1e3))))
 
-
         r_fq = cp.zeros(n, dtype=cp.float16)
         s_of_phi[32,32](flux_vector, signal_vector,n, r_fq)
-
-        
-        #indices = cp.where(r_fq<phi_th)[0]
-        #print(indices)
-
         signal_vector = signal_vector*(1 - d_tau*alpha/beta) + (d_tau/beta )*r_fq
- 
-        #cp.clip(signal_vector,0,0.5)
+            
+        start_gpu.record()
 
-        if signal_vector[n-1]>0.7:
-            signal_vector[n-1]=0
+        if (cp.max(signal_vector[somas])>0.7):
+            spike_check[32,32](signal_vector, somas, spike_check_arr)
        
-        #print('flux',flux_vector[200])
-        #print('signal',signal_vector[200])
-        #print('max',cp.max(signal_vector))
+        end_gpu.record()
+        end_gpu.synchronize()
+        t_gpu1 = cua.get_elapsed_time(start_gpu, end_gpu)
+        print(t_gpu1)            
+       
         plot_signals[i] = signal_vector
-        #plot_fluxes[i] = flux_vector 
+        plot_fluxes[i] = flux_vector 
         
     return plot_signals, plot_fluxes, weight_matrix
 
@@ -248,87 +245,10 @@ elif(mode=='length'):
     #plt.show()
 
 
-#plot
-def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
-    '''
-    Plots the signal flux and dendrite graph
-    '''
-    truncate = 0
-    time_axis = np.arange(truncate,t)
-
-    fig, axs = plt.subplots(n)
-    #plt.set_ylim(bottom=0)
-    #plt.ylim(top=1)
-    plt.subplots_adjust(left=0.1,
-                    bottom=0.1, 
-                    right=0.9, 
-                    top=0.9, 
-                    wspace=0.4, 
-                    hspace=0.8)
-    
-    for i in range(n):
-        axs[i].plot(time_axis, plot_signals[:,i][truncate:t], label='signal')
-        axs[i].plot(time_axis, plot_fluxes[:,i][truncate:t], label='fluxes')
-        axs[i].set_ylim(0,1.2)
-        #axs.legend()
-        axs[i].set_title('node ' + str(i))
-    #plt.show()
-    plt.savefig('test_plot1.png', dpi=400, bbox_inches='tight')
-
-
-    #fig, axs = plt.subplots(n)
-
-    #for i in range(n):
-    #    axs[i].plot(time_axis, plot_signals[:,i][truncate:t], label='signal')
-    #plt.show()
-
-
-    edges = []
-    for i in range(n):
-        for j in range(n):
-            if weight_matrix[:,i][j] !=0:
-                edges.append((j, i))
-
-    #print(edges)
-    G = nx.DiGraph(directed=True)
-    G.add_edges_from(
-        edges)
-    
-    edge_labels = dict([((n1, n2), np.around(weight_matrix[n1][n2], decimals=2))
-                    for n1, n2 in G.edges])
-    pos = nx.planar_layout(G)
-
-    nx.draw_networkx(G,pos)#, node_color=values)
-
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-
-    #values = np.ones(n)
-    #values[n-1]+=1
-    #print(values)
-    #pos = nx.planar_layout(G)
-    #plt.show()
-    plt.savefig('test_plot2.png', dpi=400, bbox_inches='tight')
-
-
-
-
-
-
-#test_array = [1,0,1,0,0.5,1,0.6]
-#test_array_gpu = cp.asarray(test_array)
 
 #print('used bytes',mempool.used_bytes())
 #print('total bytes',mempool.total_bytes())
 #print('cpu mem?',pinned_mempool.n_free_blocks())
-#print('^ before')
-k=30000
-#tt1 = time.perf_counter()
-#test = cp.random.rand(k,k)
-#tt2 = time.perf_counter()
-#print('cp rand', tt2-tt1)
-#print('orig',test)
-#cp.fill_diagonal(test,0)
-#print('diag',test)
 
 start_gpu1 = cp.cuda.Event()
 end_gpu1= cp.cuda.Event() 
@@ -350,17 +270,40 @@ time_axis = np.arange(t)
 #plt.plot(time_axis, cp.asnumpy(plot_signals)[:,0], label='fluxes')
 #plt.savefig('test_plot4.png', dpi=400, bbox_inches='tight')
 #print(cp.asnumpy(plot_fluxes[:,k-1]))
-fig, axs = plt.subplots(6)
-axs[0].plot(time_axis, cp.asnumpy(plot_signals)[:,0], label='node 0')
-axs[1].plot(time_axis, cp.asnumpy(plot_signals)[:,1], label='node 10')
-#axs[2].plot(time_axis, cp.asnumpy(plot_signals)[:,100], label='node 100')
-axs[3].plot(time_axis, cp.asnumpy(plot_signals)[:,int(k/2)], label='node 1000')
-#axs[4].plot(time_axis, cp.asnumpy(plot_signals)[:,1499], label='node 2500')
-axs[5].plot(time_axis, cp.asnumpy(plot_signals)[:,k-1], label='soma')
+fig, axs = plt.subplots(12)
+
+axs[0].plot(time_axis, cp.asnumpy(plot_fluxes)[:,0])
+axs[1].plot(time_axis, cp.asnumpy(plot_fluxes)[:,1])
+axs[2].plot(time_axis, cp.asnumpy(plot_fluxes)[:,2])
+axs[3].plot(time_axis, cp.asnumpy(plot_fluxes)[:,3])
+axs[4].plot(time_axis, cp.asnumpy(plot_fluxes)[:,4])
+axs[5].plot(time_axis, cp.asnumpy(plot_fluxes)[:,6])
+
+axs[6].plot(time_axis, cp.asnumpy(plot_fluxes)[:,k-6])
+axs[7].plot(time_axis, cp.asnumpy(plot_fluxes)[:,k-5])
+axs[8].plot(time_axis, cp.asnumpy(plot_fluxes)[:,k-4])
+axs[9].plot(time_axis, cp.asnumpy(plot_fluxes)[:,k-3])
+axs[10].plot(time_axis, cp.asnumpy(plot_fluxes)[:,k-2])
+axs[11].plot(time_axis, cp.asnumpy(plot_fluxes)[:,k-1])
+
+
+axs[0].plot(time_axis, cp.asnumpy(plot_signals)[:,0])
+axs[1].plot(time_axis, cp.asnumpy(plot_signals)[:,1])
+axs[2].plot(time_axis, cp.asnumpy(plot_signals)[:,2])
+axs[3].plot(time_axis, cp.asnumpy(plot_signals)[:,3])
+axs[4].plot(time_axis, cp.asnumpy(plot_signals)[:,4])
+axs[5].plot(time_axis, cp.asnumpy(plot_signals)[:,6])
+
+axs[6].plot(time_axis, cp.asnumpy(plot_signals)[:,k-6])
+axs[7].plot(time_axis, cp.asnumpy(plot_signals)[:,k-5])
+axs[8].plot(time_axis, cp.asnumpy(plot_signals)[:,k-4])
+axs[9].plot(time_axis, cp.asnumpy(plot_signals)[:,k-3])
+axs[10].plot(time_axis, cp.asnumpy(plot_signals)[:,k-2])
+axs[11].plot(time_axis, cp.asnumpy(plot_signals)[:,k-1])
 
 axs[0].set_title('node ' + str(1))
-for i in range(6):
+for i in range(12):
     axs[i].set_ylim(0,1.2)
     axs[i].set_xlim(0,2000)
 
-plt.savefig('test_plot_scratch1.png', dpi=400, bbox_inches='tight')
+plt.savefig('flux_sig_spike_plot.png', dpi=400, bbox_inches='tight')
