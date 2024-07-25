@@ -46,7 +46,7 @@ def generate_graph(n):
         for j in range(i):  #graph connectivity problems
             if weight_matrix[j].any() == 0: #why does this work?
                 value = random.randint(j+1,n-1)   # random.choice(np.arange(j+1,n,1))
-                weight_matrix[j][value]=(round(random.random(),2))*0.7+0.3
+                weight_matrix[j][value]=0.5#(round(random.random(),2))*0.7+0.3
                 #weight_matrix[j][value]=0.5
     
     return weight_matrix
@@ -189,7 +189,7 @@ def time_measure(data, t, mode="length"):
 
 
 
-mode='size'#'length'#'length'
+mode=''#'length'#'length'
 if(mode=='size'):
     print(mode)
     total_time = time_measure( data,t, mode="size")
@@ -273,10 +273,10 @@ def plot_signal_flux(plot_signals, plot_fluxes,weight_matrix, t, n):
 
 
 
-t1 = time.perf_counter()
-plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), 3000 , data)
-t2 = time.perf_counter()
-print(t2-t1)
+#t1 = time.perf_counter()
+#plot_signals,plot_fluxes, weight_matrix = neuron_step(int(t), 3000 , data)
+#t2 = time.perf_counter()
+#print(t2-t1)
 #print(get_leaves(weight_matrix,13, random_val=False))
 
     
